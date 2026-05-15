@@ -62,10 +62,12 @@ with st.sidebar:
     tier_series: pd.Series | None = None
 
     if data_source == "MOESM9 (full paper dataset)":
-        st.caption(
-            "Download **MOESM9** from the "
-            "[Nature paper](https://www.nature.com/articles/s41586-026-10459-x) "
-            "supplementary data, then upload it here."
+        st.markdown(
+            "**Step 1:** "
+            "[Download MOESM9 here](https://static-content.springer.com/esm/art%3A10.1038"
+            "%2Fs41586-026-10459-x/MediaObjects/41586_2026_10459_MOESM9_ESM.xlsx)"
+            " (1.9 MB, free)\n\n"
+            "**Step 2:** Upload it below."
         )
         moesm9_upload = st.file_uploader(
             "Upload 41586_2026_10459_MOESM9_ESM.xlsx",
