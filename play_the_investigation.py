@@ -115,13 +115,14 @@ st.markdown("""
 @st.cache_data(show_spinner="Loading TransCODE dataset…")
 def load_df():
     candidates = [
-        "41586_2026_10459_MOESM9_ESM_structural_predictions.csv",
+        "data/moesm9.csv",
+        "41586_2026_10459_MOESM9_ESM.xlsx",
+        "data/41586_2026_10459_MOESM9_ESM.xlsx",
         os.path.join(os.path.dirname(__file__), "..", "41586_2026_10459_MOESM9_ESM.xlsx"),
-        os.path.expanduser("~/Downloads/41586_2026_10459_MOESM9_ESM.xlsx"),
     ]
     for p in candidates:
         if os.path.exists(p):
-            df = pd.read_excel(p, sheet_name="Structural predictions", engine="openpyxl")
+            df = pd.read_csv(p) if p.endswith(".csv") else pd.read_excel(p, sheet_name="Structural predictions", engine="openpyxl")
             df["detected"] = df["tier"].str.match(r"Tier [123]", na=False).astype(int)
             return df
     return None
