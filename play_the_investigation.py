@@ -2,9 +2,6 @@
 pages/02_The_Investigation.py
 JUNK: The Dark Proteome Investigation
 A 5-chapter narrative puzzle game using real data from the Nature 2026 TransCODE paper.
-
-Drop this file into the pages/ directory of the dark-proteome-explorer repo.
-The MOESM9 xlsx must be present at the repo root (same location the main app expects it).
 """
 
 import os
@@ -118,8 +115,7 @@ st.markdown("""
 @st.cache_data(show_spinner="Loading TransCODE dataset…")
 def load_df():
     candidates = [
-        "41586_2026_10459_MOESM9_ESM.xlsx",
-        "data/41586_2026_10459_MOESM9_ESM.xlsx",
+        "41586_2026_10459_MOESM9_ESM_structural_predictions.csv",
         os.path.join(os.path.dirname(__file__), "..", "41586_2026_10459_MOESM9_ESM.xlsx"),
         os.path.expanduser("~/Downloads/41586_2026_10459_MOESM9_ESM.xlsx"),
     ]
