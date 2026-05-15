@@ -15,13 +15,25 @@ import streamlit as st
 import streamlit.components.v1 as components
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from src.classifier import feature_importances, load_model, predict
-from src.data_loader import DEMO_SEQUENCES, load_fasta, load_moesm9
+from src.classifier import feature_importances, predict, train
+from src.data_loader import DEMO_LABELS, DEMO_SEQUENCES, load_fasta, load_moesm9
 from src.esmfold import fold_batch, mean_plddt
 from src.features import combine_features, sequences_to_features
 
 STRUCTURES_DIR = Path("structures")
-MODEL_PATH = Path("models/classifier.joblib")
+
+
+def get_model():
+    """Return (clf, scaler) from session_state, training if needed."""
+    if "clf" not in st.session_state or "scaler" not in st.session_state:
+        with st.spinner("Training model on demo data..."):
+            import pandas as pd
+            X = sequences_to_features(DEMO_SEQUENCES)
+            y = pd.Series(DEMO_LABELS).loc[X.index]
+            clf, scaler = train(X, y, save=False, demo_mode=True)
+            st.session_state["clf"] = clf
+            st.session_state["scaler"] = scaler
+    return st.session_state["clf"], st.session_state["scaler"]
 
 TIER_COLORS = {
     "Tier 1A": "#1a7f37",
@@ -75,8 +87,8 @@ with st.sidebar:
             key="moesm9_upload",
         )
         if moesm9_upload and st.button("Load MOESM9"):
+            import io
             with st.spinner("Loading 7,264 ncORFs..."):
-                import io
                 file_bytes = io.BytesIO(moesm9_upload.read())
                 seqs, labels, pf = load_moesm9(file_bytes)
                 st.session_state["sequences"] = seqs
@@ -88,7 +100,14 @@ with st.sidebar:
                 ).set_index("orf_id")
                 st.session_state["tier_series"] = raw["tier"]
                 st.session_state["plddt_esmfold"] = raw["plddt_esmfold"]
-            st.success(f"Loaded {len(seqs):,} sequences.")
+            with st.spinner("Training classifier on full dataset (~30s)..."):
+                X_train = combine_features(
+                    sequences_to_features(seqs), pf
+                )
+                clf, scaler = train(X_train, labels.loc[X_train.index], save=False)
+                st.session_state["clf"] = clf
+                st.session_state["scaler"] = scaler
+            st.success(f"Loaded {len(seqs):,} sequences and trained classifier.")
 
         if "sequences" in st.session_state:
             sequences = st.session_state["sequences"]
@@ -106,10 +125,11 @@ with st.sidebar:
             st.success(f"{len(sequences)} sequences loaded.")
 
     st.divider()
-    if MODEL_PATH.exists():
-        st.success("Model ready")
+    if "clf" in st.session_state:
+        trained_on = "full dataset" if "labels" in st.session_state else "demo data"
+        st.success(f"Model ready (trained on {trained_on})")
     else:
-        st.warning("No model - run `python train_classifier.py --moesm9 <path>`")
+        st.info("Model will train automatically on first use.")
 
     if tier_series is not None:
         st.divider()
@@ -143,15 +163,13 @@ with tab_classify:
     if not sequences:
         st.info("Load sequences using the sidebar.")
         st.stop()
-    if not MODEL_PATH.exists():
-        st.warning("Train a model first: `python train_classifier.py --moesm9 <path>`")
-        st.stop()
 
     n_max = min(len(sequences), 7264)
     n_display = st.slider("Sequences to classify", 10, n_max, min(n_max, 500))
     seq_subset = dict(list(sequences.items())[:n_display])
 
     if st.button("Run Classifier", type="primary"):
+        clf, scaler = get_model()
         with st.spinner(f"Computing features for {len(seq_subset):,} sequences..."):
             bio_X = sequences_to_features(seq_subset)
 
@@ -161,7 +179,6 @@ with tab_classify:
             else:
                 X = bio_X
 
-            clf, scaler = load_model()
             probs = predict(X, clf, scaler)
 
             results = pd.DataFrame({
@@ -177,7 +194,6 @@ with tab_classify:
 
         st.session_state["results"] = results
         st.session_state["X"] = X
-        st.session_state["clf"] = clf
         st.session_state["probs"] = probs
 
     if "results" in st.session_state:

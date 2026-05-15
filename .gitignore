@@ -1,4 +1,5 @@
 structures/
+models/
 __pycache__/
 *.pyc
 *.pyo
