@@ -1,0 +1,8 @@
+structures/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.streamlit/credentials.toml
+*.xlsx
+*.csv
