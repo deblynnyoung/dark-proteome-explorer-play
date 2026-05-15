@@ -20,6 +20,15 @@ from src.data_loader import DEMO_LABELS, DEMO_SEQUENCES, load_fasta, load_moesm9
 from src.esmfold import fold_batch, mean_plddt
 from src.features import combine_features, sequences_to_features
 
+
+def confetti():
+    components.html("""
+        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+        <script>
+        confetti({ particleCount: 180, spread: 90, origin: { y: 0.45 } });
+        </script>
+    """, height=0)
+
 STRUCTURES_DIR = Path("structures")
 
 
@@ -108,6 +117,7 @@ with st.sidebar:
                 st.session_state["clf"] = clf
                 st.session_state["scaler"] = scaler
             st.success(f"Loaded {len(seqs):,} sequences and trained classifier.")
+            confetti()
 
         if "sequences" in st.session_state:
             sequences = st.session_state["sequences"]
