@@ -628,7 +628,7 @@ def chapter_4(df):
         key="ch4_radio",
     )
 
-    if answer and "ancient" in answer and "conserved" in answer:
+    if answer and "ancient" in answer.lower() and "conserved" in answer.lower():
         st.success(f"**Correct.** Sequences the genome has preserved for tens of millions of years are expressed at consistently higher levels — high enough for the screen to pick them up. 'Conserved' sequences are detected at {cons_rate:.0f}% vs {young_rate:.0f}% for recently-evolved ones. The genome kept these sequences for a reason. That reason got them flagged.")
 
         if not st.session_state.ch4_done:
