@@ -115,7 +115,7 @@ st.markdown("""
 @st.cache_data(show_spinner="Loading TransCODE dataset…")
 def load_df():
     candidates = [
-        "data/moesm9.csv",
+        "data/41586_2026_10459_MOESM9_ESM_structural_predictions.csv",
         "41586_2026_10459_MOESM9_ESM.xlsx",
         "data/41586_2026_10459_MOESM9_ESM.xlsx",
         os.path.join(os.path.dirname(__file__), "..", "41586_2026_10459_MOESM9_ESM.xlsx"),
