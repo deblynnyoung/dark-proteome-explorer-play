@@ -124,6 +124,9 @@ def load_df():
         if os.path.exists(p):
             df = pd.read_csv(p) if p.endswith(".csv") else pd.read_excel(p, sheet_name="Structural predictions", engine="openpyxl")
             df["detected"] = df["tier"].str.match(r"Tier [123]", na=False).astype(int)
+            df["length"] = pd.to_numeric(df["length"], errors="coerce")
+            df["PhyloCSF.primates"] = pd.to_numeric(df["PhyloCSF.primates"], errors="coerce")
+            df["PhyloCSF.mammals"] = pd.to_numeric(df["PhyloCSF.mammals"], errors="coerce")
             return df
     return None
 
