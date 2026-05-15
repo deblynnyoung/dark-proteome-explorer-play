@@ -25,9 +25,15 @@ def confetti():
     components.html("""
         <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
         <script>
-        confetti({ particleCount: 180, spread: 90, origin: { y: 0.45 } });
+        // Create canvas on the parent Streamlit page so confetti covers the full window
+        var canvas = window.parent.document.createElement("canvas");
+        window.parent.document.body.appendChild(canvas);
+        canvas.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;pointer-events:none;";
+        var burst = confetti.create(canvas, { resize: true, useWorker: true });
+        burst({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
+        setTimeout(function () { canvas.remove(); }, 4000);
         </script>
-    """, height=0)
+    """, height=1)
 
 STRUCTURES_DIR = Path("structures")
 
