@@ -7,6 +7,7 @@ Run with:
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 import pandas as pd
@@ -20,36 +21,61 @@ from src.data_loader import DEMO_LABELS, DEMO_SEQUENCES, load_fasta, load_moesm9
 from src.esmfold import fold_batch, mean_plddt
 from src.features import combine_features, sequences_to_features
 
-
-def confetti():
-    components.html("""
-        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-        <script>
-        // Create canvas on the parent Streamlit page so confetti covers the full window
-        var canvas = window.parent.document.createElement("canvas");
-        window.parent.document.body.appendChild(canvas);
-        canvas.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;pointer-events:none;";
-        var burst = confetti.create(canvas, { resize: true, useWorker: true });
-        burst({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
-        setTimeout(function () { canvas.remove(); }, 4000);
-        </script>
-    """, height=1)
-
 STRUCTURES_DIR = Path("structures")
 
+# ── Easter egg content ────────────────────────────────────────────────────────
 
-def get_model():
-    """Return (clf, scaler) from session_state, training if needed."""
-    if "clf" not in st.session_state or "scaler" not in st.session_state:
-        with st.spinner("Training model on demo data..."):
-            import pandas as pd
-            X = sequences_to_features(DEMO_SEQUENCES)
-            y = pd.Series(DEMO_LABELS).loc[X.index]
-            clf, scaler = train(X, y, save=False, demo_mode=True)
-            st.session_state["clf"] = clf
-            st.session_state["scaler"] = scaler
-    return st.session_state["clf"], st.session_state["scaler"]
+LOADING_MSGS = [
+    "Interrogating the dark proteome...",
+    "Pestering the ribosomes...",
+    "Whispering to the mass spectrometer...",
+    "Translating the untranslatable...",
+    "Convincing sklearn to cooperate...",
+    "Mining the proteome's dark corners...",
+    "Asking AlphaFold nicely...",
+    "Bribing the gradient boosting trees...",
+    "Rummaging through non-canonical open reading frames...",
+    "Doing science at you very fast...",
+]
 
+FOLD_MSGS = [
+    "Folding proteins like origami...",
+    "Asking ESMFold to do its thing...",
+    "Simulating millions of years of evolution...",
+    "Predicting structures with neural magic...",
+    "Convincing amino acids to behave...",
+]
+
+FACTS = [
+    "MOTS-c is a 16 AA microprotein encoded in mitochondrial DNA that regulates metabolism and extends healthy lifespan in mice.",
+    "Humanin, encoded in the mitochondrial 16S rRNA gene, protects neurons from Alzheimer's-related amyloid-beta toxicity.",
+    "The TransCODE Consortium analyzed 95,520 proteomics experiments to build their ncORF landscape.",
+    "Only 16 ncORFs reach Tier 1A — verified with synthetic peptides. You could fit all their names on a Post-it note.",
+    "Microproteins can be as short as 11 amino acids and still be biologically functional.",
+    "The term 'peptidein' was coined in 2026 to describe microproteins of indeterminate functional potential.",
+    "Some microproteins are encoded in sequences once dismissed as 'junk DNA'.",
+    "SHLP2, a mitochondria-derived microprotein, has been linked to promoting eye health and reducing retinal degeneration.",
+    "The dark proteome may contain thousands of functional proteins we haven't discovered yet.",
+    "Ribo-seq (ribosome profiling) revealed that ribosomes translate far more of the genome than we ever expected.",
+    "pLDDT scores above 90 from AlphaFold are considered more reliable than many experimental structures.",
+    "The human proteome was thought to contain ~20,000 proteins. Microproteins may add thousands more.",
+]
+
+KNOWN_MICROPROTEINS: dict[str, dict] = {
+    "MRWQEMGYIFYPRKLR": {
+        "name": "MOTS-c",
+        "fact": "Discovered in 2015, MOTS-c is encoded in mitochondrial DNA and travels to the nucleus under stress to regulate gene expression. It extends healthy lifespan in mice.",
+    },
+    "MAPRGFSCLLLLTSEIDLPVKRRA": {
+        "name": "Humanin",
+        "fact": "Humanin was discovered in brain tissue from an Alzheimer's patient in 2001. It's encoded within the 16S rRNA gene of mitochondrial DNA and protects neurons from amyloid-beta toxicity.",
+    },
+}
+
+# ── Change this to your personal message for your friend! ─────────────────────
+SECRET_MESSAGE = "I love you so much, my nosewipefingertofingerbestladybabypumpkinmuffinloverpants!"
+
+# ── Tier config ───────────────────────────────────────────────────────────────
 TIER_COLORS = {
     "Tier 1A": "#1a7f37",
     "Tier 1B": "#2da44e",
@@ -67,8 +93,130 @@ TIER_DESC = {
     "Tier 4":  "Not detected",
 }
 
-st.set_page_config(page_title="Dark Proteome Explorer", page_icon=":dna:", layout="wide")
 
+# ── Celebration functions ─────────────────────────────────────────────────────
+
+def confetti():
+    """Rainbow confetti burst — fires on the parent Streamlit page."""
+    components.html("""
+        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+        <script>
+        var canvas = window.parent.document.createElement("canvas");
+        window.parent.document.body.appendChild(canvas);
+        canvas.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;pointer-events:none;";
+        var burst = confetti.create(canvas, { resize: true, useWorker: true });
+        burst({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
+        setTimeout(function () { canvas.remove(); }, 4000);
+        </script>
+    """, height=1)
+
+
+def gold_confetti():
+    """Gold confetti burst — for high-confidence structure predictions."""
+    components.html("""
+        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+        <script>
+        var canvas = window.parent.document.createElement("canvas");
+        window.parent.document.body.appendChild(canvas);
+        canvas.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;pointer-events:none;";
+        var burst = confetti.create(canvas, { resize: true, useWorker: true });
+        burst({
+            particleCount: 120, spread: 60, origin: { y: 0.5 },
+            colors: ['#FFD700','#FFA500','#FFEC8B','#FFF8DC','#FFD700']
+        });
+        setTimeout(function () { canvas.remove(); }, 4000);
+        </script>
+    """, height=1)
+
+
+def inject_easter_eggs(secret_message: str):
+    """Inject persistent JS easter eggs: Konami code + title click secret."""
+    safe_msg = secret_message.replace("`", "'").replace("\\", "\\\\")
+    components.html(f"""
+        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+        <script>
+        (function() {{
+            var parent = window.parent;
+
+            // ── Konami code: up up down down left right left right B A ─────────
+            var konamiSeq = [38,38,40,40,37,39,37,39,66,65];
+            var konamiIdx = 0;
+            parent.document.addEventListener('keydown', function(e) {{
+                konamiIdx = (e.keyCode === konamiSeq[konamiIdx]) ? konamiIdx + 1 : (e.keyCode === konamiSeq[0] ? 1 : 0);
+                if (konamiIdx === konamiSeq.length) {{
+                    konamiIdx = 0;
+                    var existing = parent.document.getElementById('konami-style');
+                    if (existing) {{
+                        existing.remove();
+                    }} else {{
+                        var s = parent.document.createElement('style');
+                        s.id = 'konami-style';
+                        s.textContent = `
+                            .stApp {{ background: linear-gradient(135deg,#0d0d2b,#1a0533,#0d1b2b) !important; }}
+                            .stApp h1, .stApp h2, .stApp h3 {{ color: #a855f7 !important; }}
+                            .stApp p, .stApp label, .stApp span {{ color: #c4b5fd !important; }}
+                            .stApp .stButton button {{ background: #6d28d9 !important; border-color: #a855f7 !important; }}
+                        `;
+                        parent.document.head.appendChild(s);
+                        var toast = parent.document.createElement('div');
+                        toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a0533;color:#a855f7;border:2px solid #a855f7;padding:24px 40px;border-radius:12px;z-index:9999;font-size:18px;font-family:monospace;text-align:center;';
+                        toast.innerHTML = '&#127756; DARK PROTEOME MODE ACTIVATED &#127756;<br><small style="color:#c4b5fd;font-size:13px;">Press again to return to the light</small>';
+                        parent.document.body.appendChild(toast);
+                        setTimeout(function() {{ toast.remove(); }}, 3000);
+                    }}
+                }}
+            }});
+
+            // ── Title click secret (7 clicks) ─────────────────────────────────
+            var titleClicks = 0;
+            function attachTitle() {{
+                var h1 = parent.document.querySelector('h1');
+                if (h1 && !h1.dataset.secretReady) {{
+                    h1.dataset.secretReady = 'true';
+                    h1.style.cursor = 'pointer';
+                    h1.title = '';
+                    h1.addEventListener('click', function() {{
+                        titleClicks++;
+                        if (titleClicks === 7) {{
+                            titleClicks = 0;
+                            var msg = parent.document.createElement('div');
+                            msg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border:3px solid #ff69b4;padding:30px 44px;border-radius:16px;z-index:9999;font-size:15px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.15);max-width:380px;line-height:1.7;';
+                            msg.innerHTML = `{safe_msg}`;
+                            parent.document.body.appendChild(msg);
+                            var canvas = parent.document.createElement('canvas');
+                            parent.document.body.appendChild(canvas);
+                            canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9998;pointer-events:none;';
+                            var burst = confetti.create(canvas, {{ resize: true }});
+                            burst({{ particleCount: 150, spread: 80, colors: ['#ff69b4','#ff1493','#ffb6c1','#fff','#ff69b4'] }});
+                            setTimeout(function() {{ msg.remove(); canvas.remove(); }}, 6000);
+                        }}
+                    }});
+                }}
+            }}
+            var t = setInterval(function() {{
+                if (parent.document.querySelector('h1')) {{ attachTitle(); clearInterval(t); }}
+            }}, 200);
+        }})();
+        </script>
+    """, height=0)
+
+
+# ── Model helpers ─────────────────────────────────────────────────────────────
+
+def get_model():
+    if "clf" not in st.session_state or "scaler" not in st.session_state:
+        with st.spinner("Training model on demo data..."):
+            X = sequences_to_features(DEMO_SEQUENCES)
+            y = pd.Series(DEMO_LABELS).loc[X.index]
+            clf, scaler = train(X, y, save=False, demo_mode=True)
+            st.session_state["clf"] = clf
+            st.session_state["scaler"] = scaler
+    return st.session_state["clf"], st.session_state["scaler"]
+
+
+# ── Page ──────────────────────────────────────────────────────────────────────
+
+st.set_page_config(page_title="Dark Proteome Explorer", page_icon=":dna:", layout="wide")
 st.title("Dark Proteome Explorer")
 st.caption(
     "Predict detectability of ncORF-encoded microproteins and explore their 3D structures. "
@@ -76,7 +224,7 @@ st.caption(
     "- TransCODE Consortium, Nature 2026."
 )
 
-# ---- Sidebar ----------------------------------------------------------------
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Data Source")
     data_source = st.radio(
@@ -110,15 +258,11 @@ with st.sidebar:
                 st.session_state["labels"] = labels
                 st.session_state["paper_features"] = pf
                 file_bytes.seek(0)
-                raw = pd.read_excel(
-                    file_bytes, sheet_name="Structural predictions"
-                ).set_index("orf_id")
+                raw = pd.read_excel(file_bytes, sheet_name="Structural predictions").set_index("orf_id")
                 st.session_state["tier_series"] = raw["tier"]
                 st.session_state["plddt_esmfold"] = raw["plddt_esmfold"]
-            with st.spinner("Training classifier on full dataset (~30s)..."):
-                X_train = combine_features(
-                    sequences_to_features(seqs), pf
-                )
+            with st.spinner(random.choice(LOADING_MSGS)):
+                X_train = combine_features(sequences_to_features(seqs), pf)
                 clf, scaler = train(X_train, labels.loc[X_train.index], save=False)
                 st.session_state["clf"] = clf
                 st.session_state["scaler"] = scaler
@@ -150,12 +294,7 @@ with st.sidebar:
     if tier_series is not None:
         st.divider()
         st.markdown("**Paper tier breakdown**")
-        tier_counts = (
-            tier_series.value_counts()
-            .reindex(TIER_COLORS.keys())
-            .fillna(0)
-            .astype(int)
-        )
+        tier_counts = tier_series.value_counts().reindex(TIER_COLORS.keys()).fillna(0).astype(int)
         for tier, count in tier_counts.items():
             pct = count / len(tier_series) * 100
             st.markdown(
@@ -164,11 +303,16 @@ with st.sidebar:
                 unsafe_allow_html=True,
             )
 
+    # Rotating science fact
+    st.divider()
+    st.markdown(f"**Did you know?**\n\n*{random.choice(FACTS)}*")
 
-# ---- Tabs -------------------------------------------------------------------
+
+# ── Tabs ──────────────────────────────────────────────────────────────────────
 tab_classify, tab_structure, tab_compare = st.tabs(
     ["Classify Sequences", "Explore Structures", "Compare with Paper"]
 )
+
 
 # =============================================================================
 # TAB 1 - Classify
@@ -186,17 +330,14 @@ with tab_classify:
 
     if st.button("Run Classifier", type="primary"):
         clf, scaler = get_model()
-        with st.spinner(f"Computing features for {len(seq_subset):,} sequences..."):
+        with st.spinner(random.choice(LOADING_MSGS)):
             bio_X = sequences_to_features(seq_subset)
-
             if paper_features_df is not None:
                 pf_subset = paper_features_df.loc[paper_features_df.index.isin(bio_X.index)]
                 X = combine_features(bio_X, pf_subset)
             else:
                 X = bio_X
-
             probs = predict(X, clf, scaler)
-
             results = pd.DataFrame({
                 "Sequence": pd.Series(seq_subset).str[:35] + "...",
                 "Length (AA)": X["length"].astype(int),
@@ -204,13 +345,31 @@ with tab_classify:
                 "GRAVY": bio_X.reindex(X.index)["gravy"].round(3),
                 "Detection Probability": probs.round(3),
             }).sort_values("Detection Probability", ascending=False)
-
             if tier_series is not None:
                 results["Paper Tier"] = tier_series.reindex(results.index)
 
         st.session_state["results"] = results
         st.session_state["X"] = X
         st.session_state["probs"] = probs
+
+        # ── Easter eggs triggered by results ─────────────────────────────────
+        # Tier 1A alert
+        if "Paper Tier" in results.columns and (results["Paper Tier"] == "Tier 1A").any():
+            n1a = (results["Paper Tier"] == "Tier 1A").sum()
+            st.balloons()
+            st.success(
+                f"You found {n1a} Tier 1A sequence{'s' if n1a > 1 else ''}! "
+                f"Only 16 exist in the entire dataset — these are verified with synthetic peptides."
+            )
+
+        # Known microprotein recognition
+        clean_seqs = {k: v.upper().replace("*", "").replace("-", "") for k, v in seq_subset.items()}
+        for seq_id, seq in clean_seqs.items():
+            if seq in KNOWN_MICROPROTEINS:
+                mp = KNOWN_MICROPROTEINS[seq]
+                st.info(
+                    f"**Hey, you're looking at {mp['name']}!** {mp['fact']}"
+                )
 
     if "results" in st.session_state:
         results = st.session_state["results"]
@@ -228,6 +387,20 @@ with tab_classify:
             width="stretch",
             height=400,
         )
+
+        # Golden sequences (prob > 0.9)
+        golden = results[results["Detection Probability"] > 0.9]
+        if not golden.empty:
+            st.markdown("---")
+            st.markdown(
+                "<div style='background:linear-gradient(90deg,#FFF8DC,#FFD700,#FFF8DC);"
+                "border:2px solid #FFD700;border-radius:10px;padding:12px 20px;margin:4px 0;'>"
+                f"<b>Golden sequences (prob > 0.9): {len(golden)}</b> — "
+                "our model is very confident these are detectable."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            st.dataframe(golden[["Sequence", "Length (AA)", "Detection Probability"]], width="stretch")
 
         with st.expander("Top 15 feature importances"):
             importances = feature_importances(
@@ -254,9 +427,7 @@ with tab_structure:
     seq_options = list(sequences.keys())
     if "results" in st.session_state:
         ranked = st.session_state["results"].index.tolist()
-        seq_options = [s for s in ranked if s in sequences] + [
-            s for s in seq_options if s not in ranked
-        ]
+        seq_options = [s for s in ranked if s in sequences] + [s for s in seq_options if s not in ranked]
 
     selected_ids = st.multiselect(
         "Select sequences to fold",
@@ -271,22 +442,23 @@ with tab_structure:
             if not pre.empty:
                 st.info("Pre-computed ESMFold pLDDT scores from the paper (no API call needed):")
                 st.dataframe(
-                    pre.rename("pLDDT (paper)")
-                    .reset_index()
-                    .rename(columns={"orf_id": "ID"})
-                    .style.background_gradient(
-                        subset=["pLDDT (paper)"], cmap="RdYlGn", vmin=50, vmax=90
-                    ),
+                    pre.rename("pLDDT (paper)").reset_index().rename(columns={"orf_id": "ID"})
+                    .style.background_gradient(subset=["pLDDT (paper)"], cmap="RdYlGn", vmin=50, vmax=90),
                     width="stretch",
                 )
 
         if st.button("Fold & Visualize (ESMFold API)", type="primary"):
             to_fold = {sid: sequences[sid] for sid in selected_ids}
-            with st.spinner(f"Folding {len(to_fold)} sequences (~{len(to_fold) * 15}s)..."):
+            with st.spinner(random.choice(FOLD_MSGS)):
                 pdbs = fold_batch(to_fold, output_dir=STRUCTURES_DIR, delay=1.5)
             st.session_state["pdbs"] = pdbs
             if pdbs:
                 st.success(f"Folded {len(pdbs)}/{len(to_fold)} sequences.")
+                # Gold confetti for high-confidence structures
+                avg_plddts = [mean_plddt(p) for p in pdbs.values() if mean_plddt(p)]
+                if avg_plddts and (sum(avg_plddts) / len(avg_plddts)) > 85:
+                    gold_confetti()
+                    st.info("High-confidence structures — mean pLDDT above 85!")
             else:
                 st.error("All folds failed - the ESMFold API may be temporarily down.")
 
@@ -316,12 +488,8 @@ with tab_structure:
         with col_3d:
             view = py3Dmol.view(width=620, height=460)
             view.addModel(pdb_str, "pdb")
-            view.setStyle({}, {"cartoon": {"colorscheme": {
-                "prop": "b", "gradient": "roygb", "min": 50, "max": 90,
-            }}})
-            view.addSurface("VDW", {"opacity": 0.25, "colorscheme": {
-                "prop": "b", "gradient": "roygb", "min": 50, "max": 90,
-            }})
+            view.setStyle({}, {"cartoon": {"colorscheme": {"prop": "b", "gradient": "roygb", "min": 50, "max": 90}}})
+            view.addSurface("VDW", {"opacity": 0.25, "colorscheme": {"prop": "b", "gradient": "roygb", "min": 50, "max": 90}})
             view.zoomTo()
             components.html(view._make_html(), height=480)
 
@@ -348,7 +516,6 @@ with tab_compare:
         "Detected (paper)": (tier_aligned != "Tier 4").astype(int),
     }).dropna()
 
-    # Overall metrics
     y_true = compare_df["Detected (paper)"]
     y_prob = compare_df["Our Probability"]
     col_a, col_b, col_c = st.columns(3)
@@ -357,14 +524,11 @@ with tab_compare:
     col_c.metric("Sequences compared", f"{len(compare_df):,}")
 
     st.divider()
-
-    # Mean probability per tier
     st.markdown("**Mean predicted probability by paper tier**")
     tier_means = (
         compare_df.groupby("Paper Tier")["Our Probability"]
         .agg(["mean", "median", "count"])
-        .reindex(TIER_COLORS.keys())
-        .dropna()
+        .reindex(TIER_COLORS.keys()).dropna()
         .rename(columns={"mean": "Mean Prob", "median": "Median Prob", "count": "Count"})
     )
     st.dataframe(
@@ -374,15 +538,15 @@ with tab_compare:
         width="stretch",
     )
 
-    # Sorted score distribution per tier (one line per tier)
     st.divider()
     st.markdown("**Score distribution per tier** (sorted, up to 500 per tier)")
     chart_data = {
         tier: compare_df.loc[compare_df["Paper Tier"] == tier, "Our Probability"]
-        .sort_values()
-        .reset_index(drop=True)
-        .iloc[:500]
-        for tier in TIER_COLORS
-        if tier in compare_df["Paper Tier"].values
+        .sort_values().reset_index(drop=True).iloc[:500]
+        for tier in TIER_COLORS if tier in compare_df["Paper Tier"].values
     }
     st.line_chart(pd.DataFrame(dict(chart_data)))
+
+
+# ── Persistent easter egg JS (Konami + title click) ───────────────────────────
+inject_easter_eggs(SECRET_MESSAGE)
