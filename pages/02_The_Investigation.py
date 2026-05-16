@@ -11,6 +11,15 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
+from src.career import (
+    add_item,
+    has_item,
+    init_career,
+    mark_game_complete,
+    mark_path,
+    render_inventory_sidebar,
+)
+
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -147,6 +156,7 @@ def _init():
             st.session_state[k] = v
 
 _init()
+init_career()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
@@ -188,9 +198,14 @@ def sidebar(df):
                 st.markdown(f'<span class="evidence-pill">✓ {e}</span>', unsafe_allow_html=True)
 
         st.markdown("---")
-        if st.button("↩ Restart", use_container_width=True):
+        render_inventory_sidebar()
+        st.markdown("---")
+        if st.button("↩ Restart this game", use_container_width=True):
+            preserve = st.session_state.get("career")
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
+            if preserve is not None:
+                st.session_state["career"] = preserve
             st.rerun()
 
 
@@ -645,7 +660,7 @@ def chapter_4(df):
 
 # ── Chapter 5 ─────────────────────────────────────────────────────────────────
 
-EVIDENCE_OPTIONS = {
+EVIDENCE_OPTIONS_BASE = {
     "A — Evolutionary conservation analysis": {
         "correct": True,
         "desc": "PhyloCSF scores showing c10riboseqorf92 and related ORFs have measurably higher conservation than undetected sequences. Reproducible from public data. Peer-reviewable.",
@@ -667,6 +682,25 @@ EVIDENCE_OPTIONS = {
         "desc": "The compliance compound's downstream cascade. Also classified. Including it exposes sources, allows NovaBridge to invoke national security, and sinks the paper.",
     },
 }
+
+
+def evidence_options():
+    """Build the evidence catalog dynamically based on career inventory."""
+    options = dict(EVIDENCE_OPTIONS_BASE)
+    if has_item("screenshot"):
+        # Option F unlocks when the player brought a query log screenshot from the Analyst game.
+        # If they also have Park's Trust, the source is named — more defensible, more dangerous.
+        if has_item("park_trust"):
+            options["F — Named NovaBridge analyst with internal query logs"] = {
+                "correct": True,
+                "desc": "An eight-month archive of automated ORBLq queries against HelixScreen live data, provided by the analyst who pulled them. First-person chain of custody. Lawyers will sue. They will not win.",
+            }
+        else:
+            options["F — Anonymous NovaBridge insider — internal query logs"] = {
+                "correct": True,
+                "desc": "Eight months of automated ORBLq queries against live patient data, provided by an anonymous NovaBridge analyst. Authenticity verifiable by metadata. The source is anonymous — the data is not.",
+            }
+    return options
 
 
 def chapter_5():
@@ -693,14 +727,18 @@ def chapter_5():
     st.markdown("##### Assemble the preprint")
     st.caption("Choose **exactly 3** pieces of evidence. One wrong choice gives NovaBridge grounds to retract the entire paper.")
 
+    options = evidence_options()
+    if has_item("screenshot"):
+        st.info("📸 Your Query Log Screenshot from the Analyst game has unlocked an additional evidence option.")
+
     choices = st.multiselect(
         "Select 3 findings:",
-        list(EVIDENCE_OPTIONS.keys()),
+        list(options.keys()),
         key="ch5_choices",
     )
 
     for c in choices:
-        opt = EVIDENCE_OPTIONS[c]
+        opt = options[c]
         color = "#22c55e" if opt["correct"] else "#ef4444"
         icon = "✓" if opt["correct"] else "✗"
         st.markdown(
@@ -714,28 +752,35 @@ def chapter_5():
         st.warning("Select exactly 3.")
 
     elif len(choices) == 3:
-        correct_count = sum(1 for c in choices if EVIDENCE_OPTIONS[c]["correct"])
+        correct_count = sum(1 for c in choices if options[c]["correct"])
 
         if correct_count == 3:
-            st.success("**A, B, and D.** Conservation. Surface presentation. Variant-adversity correlation. Three defensible, reproducible, independently verifiable findings.")
+            st.success("**Three defensible, reproducible, independently verifiable findings.** Conservation. Surface presentation. Variant-adversity correlation — or, if you brought it, the named insider archive.")
             if not st.session_state.ch5_done:
                 st.session_state.ch5_done = True
                 st.session_state.score += 20
                 add_evidence("Preprint assembled")
+                if "investigation" not in st.session_state.career["games_completed"]:
+                    mark_game_complete("investigation", "full")
+                    add_item("investigation_dossier")
             _ending("full")
 
         elif correct_count == 2:
-            bad = next(c for c in choices if not EVIDENCE_OPTIONS[c]["correct"])
+            bad = next(c for c in choices if not options[c]["correct"])
             st.warning(f"**Almost.** `{bad}` would expose the source before the story could spread. NovaBridge had the preprint retracted in 31 hours. The two surviving findings were re-published independently a week later. Some things take longer.")
             if not st.session_state.ch5_done:
                 st.session_state.ch5_done = True
                 st.session_state.score += 10
+                if "investigation" not in st.session_state.career["games_completed"]:
+                    mark_game_complete("investigation", "partial")
             _ending("partial")
 
         else:
             st.error("**Retracted in 22 hours.** Two pieces of stolen classified material. National security invoked. The scientific community couldn't defend it. The story died in the dark.")
             if not st.session_state.ch5_done:
                 st.session_state.ch5_done = True
+                if "investigation" not in st.session_state.career["games_completed"]:
+                    mark_game_complete("investigation", "fail")
             _ending("fail")
 
 

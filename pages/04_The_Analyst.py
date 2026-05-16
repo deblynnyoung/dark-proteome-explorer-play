@@ -11,6 +11,16 @@ import random
 import streamlit as st
 import pandas as pd
 
+from src.career import (
+    add_item,
+    has_item,
+    init_career,
+    mark_game_complete,
+    mark_path,
+    render_inventory_sidebar,
+    vigilante_unlocked,
+)
+
 st.set_page_config(
     page_title="JUNK: The Analyst",
     page_icon="🏢",
@@ -129,6 +139,8 @@ def _init():
         "ch3_done": False,
         "ch4_done": False,
         "ch5_done": False,
+        "ch6_done": False,
+        "yuna_done": False,   # Ch3 lobby encounter resolved
         "examined": [],
         "ended": False,
         "ending_type": None,
@@ -139,6 +151,7 @@ def _init():
             st.session_state[k] = v
 
 _init()
+init_career()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -205,9 +218,15 @@ def sidebar():
         st.markdown('<div class="sidebar-value">[REDACTED — HR access only]</div>', unsafe_allow_html=True)
 
         st.markdown("---")
-        if st.button("↩ Restart", use_container_width=True):
+        render_inventory_sidebar()
+        st.markdown("---")
+        if st.button("↩ Restart this game", use_container_width=True):
+            # Only clear Analyst-specific state, preserve career inventory
+            preserve = st.session_state.get("career")
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
+            if preserve is not None:
+                st.session_state["career"] = preserve
             st.rerun()
 
 # ── Title ─────────────────────────────────────────────────────────────────────
@@ -423,8 +442,9 @@ def chapter_2(df):
             st.markdown('<div class="doc-block flagged">You flag the query log. IT security responds within the hour. The report is acknowledged and closed with the notation: <em>"Legacy activity within authorized scope. No further action required."</em> No one explains how HelixScreen became authorized scope.</div>', unsafe_allow_html=True)
             delta_s, delta_m = +15, +20
         else:
-            st.markdown('<div class="doc-block flagged">Saved. You don\'t know what you\'re going to do with it. But it\'s somewhere NovaBridge doesn\'t control.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="doc-block flagged">Saved. You don\'t know what you\'re going to do with it. But it\'s somewhere NovaBridge doesn\'t control. <em style="color:#22c55e">📸 Query Log Screenshot added to your inventory.</em></div>', unsafe_allow_html=True)
             delta_s, delta_m = +20, +30
+            add_item("screenshot")
 
         if not st.session_state.ch2_done:
             record_choice(2, choice[0], delta_s, delta_m)
@@ -436,7 +456,66 @@ def chapter_2(df):
 
 # ── Chapter 3 — OMEGA_COHORT ──────────────────────────────────────────────────
 
+def yuna_encounter():
+    """Lobby scene before OMEGA_COHORT. Three-way fork sets career inventory."""
+    st.markdown('<div class="chapter-header">Chapter 3 — Lobby</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chapter-title">A Visitor</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="memo">
+    On your way back from the third-floor cafeteria, you cross the NovaBridge atrium.
+    A woman ahead of you fumbles with a stack of folders, a coffee, and a visitor's
+    keycard on a lanyard. The lanyard slips off. The keycard skitters across the marble
+    and lands at your foot.
+    <br><br>
+    You pick it up. The badge photo is hers.
+    <br><br>
+    <strong style="color:#cbd5e1">Dr. Yuna Park</strong><br>
+    <span style="color:#64748b">Langley-Stanford Institute for Genomic Medicine — Visiting</span>
+    <br><br>
+    She turns, sees you holding it, and starts walking back. "Oh — thank you."
+    </div>
+    """, unsafe_allow_html=True)
+
+    choice = st.radio(
+        "What do you do?",
+        [
+            "A — Hand it back, smile, walk away. You have a meeting at 2.",
+            "B — Hand it back, ask what brings her to NovaBridge. Stay for a minute.",
+            "C — Pocket it. Apologize, say you'll turn it in at the front desk. Don't.",
+        ],
+        index=None,
+        key="yuna_radio",
+    )
+
+    if choice:
+        if choice.startswith("A"):
+            st.markdown('<div class="doc-block">You hand it back. She thanks you. The interaction lasts six seconds. You don\'t exchange names.</div>', unsafe_allow_html=True)
+            st.session_state.career["yuna_encounter"] = "walked_away"
+            delta_s, delta_m = 0, 0
+        elif choice.startswith("B"):
+            st.markdown('<div class="doc-block flagged">You hand it back. She introduces herself — Yuna. You\'re here for a talk on HLA Class I bioinformatics, she says. NovaBridge invited me to consult.<br><br>She watches your face carefully when you say you work in Lattice Analytics. Something in her expression shifts. She gives you her university email before she leaves. <em>"In case you ever want to compare notes."</em> <em style="color:#22c55e">🤝 Dr. Park\'s Trust added to your inventory.</em></div>', unsafe_allow_html=True)
+            st.session_state.career["yuna_encounter"] = "talked"
+            add_item("park_trust")
+            delta_s, delta_m = +5, +15
+        else:
+            st.markdown('<div class="doc-block flagged">"I think I dropped it back near the elevators," you say. "I\'ll turn it in at the front desk on my way out." She hesitates, then thanks you. You don\'t turn it in.<br><br>The magnetic strip is active for another 48 hours before her institution deactivates it. Standard procedure. By then, you\'ve copied it. <em style="color:#22c55e">🪪 Dr. Park\'s Keycard added to your inventory.</em></div>', unsafe_allow_html=True)
+            st.session_state.career["yuna_encounter"] = "kept"
+            add_item("park_keycard")
+            delta_s, delta_m = +10, -5  # ambiguous morally — you stole, but quietly
+
+        record_choice("yuna", choice[0], delta_s, delta_m)
+
+        if st.button("Continue into Lattice Analytics →", key="yuna_next"):
+            st.session_state.yuna_done = True
+            st.rerun()
+
+
 def chapter_3(df):
+    if not st.session_state.yuna_done:
+        yuna_encounter()
+        return
+
     st.markdown('<div class="chapter-header">Chapter 3</div>', unsafe_allow_html=True)
     st.markdown('<div class="chapter-title">OMEGA_COHORT</div>', unsafe_allow_html=True)
 
@@ -637,8 +716,12 @@ def chapter_4(df):
             st.markdown('<div class="doc-block danger">The ethics report is received. You receive an automated confirmation. Forty minutes later, C. Weiss calls. Your access is suspended pending review. <em>"We\'ll talk about your future at NovaBridge tomorrow."</em></div>', unsafe_allow_html=True)
             delta_s, delta_m = +20, +25
         else:
-            st.markdown('<div class="doc-block flagged">You find her email in the TransCODE Consortium author list. You write three drafts. The fourth one you actually send — from a personal account, at 11:34 PM, with no name attached. You attach the compound brief. You attach the OMEGA_COHORT schema. <br><br>You don\'t know if she receives it. You don\'t know if it\'s enough.</div>', unsafe_allow_html=True)
-            delta_s, delta_m = +30, +40
+            if has_item("park_trust"):
+                st.markdown('<div class="doc-block flagged">You write to the email she gave you in the lobby. You sign your name. You attach the compound brief. You attach the OMEGA_COHORT schema.<br><br>She replies in eleven minutes. <em>"I remember you. I\'m going to forward this to someone. Stay near your phone."</em></div>', unsafe_allow_html=True)
+                delta_s, delta_m = +30, +50
+            else:
+                st.markdown('<div class="doc-block flagged">You find her email in the TransCODE Consortium author list. You write three drafts. The fourth one you actually send — from a personal account, at 11:34 PM, with no name attached. You attach the compound brief. You attach the OMEGA_COHORT schema. <br><br>You don\'t know if she receives it. You don\'t know if it\'s enough.</div>', unsafe_allow_html=True)
+                delta_s, delta_m = +30, +40
 
         if not st.session_state.ch4_done:
             record_choice(4, choice[0], delta_s, delta_m)
@@ -705,6 +788,7 @@ def chapter_5():
         if not st.session_state.ch5_done:
             if final.startswith("A"):
                 record_choice(5, "A", -20, -35)
+                add_item("nb_bonus")
             elif final.startswith("B"):
                 record_choice(5, "B", +10, +20)
             else:
@@ -738,6 +822,23 @@ def render_ending():
     suspicion = st.session_state.suspicion
     moral = st.session_state.moral_score
     choices = st.session_state.choices
+
+    # Persist to shared career state (idempotent — set once per run)
+    PATH_FOR_ENDING = {
+        "stayed": "bystander",
+        "flagged": "bystander",  # the "they knew" outcome is still in the bystander family
+        "leak": "whistleblower",
+        "gone": "whistleblower",  # quiet leak still counts as exposure attempt
+    }
+    if "analyst" not in st.session_state.career["games_completed"]:
+        # If you talked to Park AND chose to leak/contact her, that's the Confidant arc
+        if has_item("park_trust") and (choices.get(4) == "C" or kind == "leak"):
+            mark_game_complete("analyst", "confidant", analyst_suspicion_at_end=suspicion)
+            mark_path("confidant")
+        else:
+            path = PATH_FOR_ENDING.get(kind, "bystander")
+            mark_game_complete("analyst", kind, analyst_suspicion_at_end=suspicion)
+            mark_path(path)
 
     st.markdown("---")
 
@@ -788,6 +889,20 @@ def render_ending():
         You received a year-end bonus.
         </div>
         """, unsafe_allow_html=True)
+
+        # Secret path unlock — Vigilante
+        if vigilante_unlocked():
+            st.markdown("""
+            <div style="background:#1c1000;border-left:3px solid #f59e0b;padding:1rem 1.2rem;border-radius:0 4px 4px 0;margin:1.5rem 0;color:#f59e0b">
+            <strong>You stayed. You also still have her keycard. And the screenshot. And the bonus.</strong>
+            <br><br>
+            <span style="color:#cbd5e1;font-style:italic">Last Tuesday you found a second partition.</span>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("→ Six months later", key="vigilante_enter", type="primary", use_container_width=True):
+                st.session_state.ended = False
+                st.session_state.chapter = 6
+                st.rerun()
 
     elif kind == "flagged":
         st.markdown("""
@@ -876,6 +991,120 @@ def render_ending():
             del st.session_state[k]
         st.rerun()
 
+# ── Chapter 6 — The Vigilante ─────────────────────────────────────────────────
+
+def chapter_6():
+    st.markdown('<div class="chapter-header">Chapter 6 — Hidden</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chapter-title">Six Months Later</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="memo">
+    <div class="memo-header">NovaBridge Systems — Performance Review // NB-ANALYST-4471 // Q2 2027</div>
+    Promoted twice. Year-end bonus exceeded target by 18%.
+    Cleared for Level 3 access pending Q3 review.
+    <br><br>
+    Recommended for the NEURO-LATTICE extended program.
+    <br><br>
+    <em style="color:#22c55e">"A model employee. Discreet, thorough, low-overhead."<br>
+    — C. Weiss</em>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="memo" style="border-color:#92400e;background:#1c1000">
+    You still have the screenshot. It's been sitting on an encrypted drive in a safety
+    deposit box for six months. You haven't opened it.
+    <br><br>
+    You still have her keycard. The magnetic strip stopped working after 48 hours, but
+    you cloned it the night you took it. You've never used the clone.
+    <br><br>
+    The bonus paid your loans. There's $32,400 left in an account NovaBridge can't see.
+    <br><br>
+    Last Tuesday at 11:14 PM, while running an audit on the OMEGA_COHORT partition
+    you'd been quietly avoiding, you found a second table.
+    </div>
+    """, unsafe_allow_html=True)
+
+    if "ch6_examined" not in st.session_state:
+        st.session_state.ch6_examined = False
+
+    if st.button("🔍 Open the partition", key="ch6_open", disabled=st.session_state.ch6_examined):
+        st.session_state.ch6_examined = True
+        st.rerun()
+
+    if st.session_state.ch6_examined:
+        st.markdown("""
+        <div class="terminal">
+        <span class="terminal-prompt">NB-LATTICE > </span>SELECT COUNT(*), status FROM KAPPA_COHORT GROUP BY status<br><br>
+        <span class="terminal-output">COUNT(*) | status<br>
+        ---------|------------<br>
+        47       | MONITORING<br>
+        142      | FLAGGED<br>
+        <span class="terminal-flag">22       | COMPLETED</span><br>
+        <br>
+        211 entries total. Surface variant: KFTRLLLTQ (second-position substitution).<br>
+        Targeting compound: NL-7-VAR.<br>
+        Trial status (per Compound Registry): SUSPENDED — phase I.<br>
+        <br>
+        <span class="terminal-alert">This compound is suspended. This cohort is active.</span></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="doc-block danger">
+        NL-7-VAR was the variant compound from Chapter 1. The trial was suspended.
+        The targeting list was not.
+        <br><br>
+        211 people. 22 already "completed."
+        <br><br>
+        You go home. You sit in your apartment. You think about the screenshot in the
+        safety deposit box, and the cloned keycard in the back of your desk drawer.
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown('<div class="choice-header">How do you move?</div>', unsafe_allow_html=True)
+
+        method = st.radio(
+            "You have access, evidence, money, and six months of clean compliance metrics. Use them how?",
+            [
+                "A — Use Park's cloned keycard to access Langley-Stanford's secure network after hours. Upload everything from inside a real research institution. Untraceable to you.",
+                "B — Reach out to Park directly. Drop your cover, but coordinate a joint preprint. Slower. Riskier. But she has standing you'll never have.",
+                "C — Dump everything to a public mirror tonight. Anonymous. No coordination. The story is the story.",
+            ],
+            index=None,
+            key="ch6_radio",
+        )
+
+        if method:
+            if method.startswith("A"):
+                outcome = "ghost"
+                summary = "You let yourself into the Langley-Stanford genomics building at 2:14 AM with a cloned visitor's badge. You upload the screenshot, the OMEGA_COHORT schema, the KAPPA_COHORT counts, and the NL-7 compound brief to an FTP endpoint Yuna's lab uses for cross-institutional dataset sharing. You leave at 2:31 AM. The badge stops working three minutes later — its 48-hour clone window expires while you're walking to your car."
+                epilogue = "The preprint posts six weeks later. The supplementary data references 'an anonymous institutional source.' NovaBridge's internal investigation looks at every NovaBridge employee who'd ever visited Langley-Stanford. There are none. You receive a Q3 raise."
+            elif method.startswith("B"):
+                outcome = "coordinated"
+                summary = "You write to Park from your personal account. Not anonymous. You tell her your name, your title, what you have. You attach the KAPPA_COHORT counts as proof. She replies in twelve minutes: <em>'I remember your face. Meet me Saturday.'</em> You meet in Portland. She brings two co-authors. You bring everything."
+                epilogue = "The joint preprint posts six weeks later. Your name is on it. NovaBridge sues. NovaBridge loses. Three years later you teach a guest seminar at Langley-Stanford on ethical data infrastructure. You introduce yourself by your first name."
+            else:
+                outcome = "dump"
+                summary = "At 3:47 AM you push every file to a public mirror. No coordination, no journalists, no Park. The mirror is Tor-fronted but the metadata isn't. NovaBridge's forensics team pulls authorship signatures from the file headers within seventy-two hours."
+                epilogue = "The story breaks. The story is real. The story is also messy — the public dump includes the raw query log, which contains patient identifiers that should have been scrubbed. Privacy advocates condemn the leaker. NovaBridge sues for trade secret theft. You don't win. You don't lose either. The compound is pulled. 211 people are not on a list anymore."
+
+            st.markdown(f'<div class="doc-block">{summary}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ending-block leak">{epilogue}</div>', unsafe_allow_html=True)
+
+            # Mark game (override the earlier "bystander" with vigilante)
+            if not st.session_state.ch6_done:
+                mark_game_complete("analyst", f"vigilante_{outcome}", analyst_suspicion_at_end=st.session_state.suspicion)
+                mark_path("vigilante")
+                st.session_state.ch6_done = True
+
+            st.balloons()
+            st.markdown("---")
+            if st.button("↩ Return to career hub", use_container_width=True):
+                st.switch_page("app.py")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -898,5 +1127,7 @@ def main():
         chapter_4(df)
     elif ch == 5:
         chapter_5()
+    elif ch == 6:
+        chapter_6()
 
 main()

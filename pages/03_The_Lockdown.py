@@ -10,6 +10,14 @@ import random
 import streamlit as st
 import pandas as pd
 
+from src.career import (
+    add_item as career_add_item,
+    has_item as career_has_item,
+    init_career,
+    mark_game_complete,
+    render_inventory_sidebar,
+)
+
 st.set_page_config(page_title="JUNK: Lockdown", page_icon="🔒", layout="wide")
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -384,6 +392,15 @@ def _init():
             st.session_state[k] = v
 
 _init()
+init_career()
+
+# Pre-load inventory from cross-game career state (idempotent).
+# Park's keycard auto-grants OLMALINC sequence (you went into Yuna's lab with credentials).
+# Screenshot pre-grants omega_flag (you've seen the queries before; you know what Ω means).
+if career_has_item("park_keycard") and "olmalinc_seq" not in st.session_state.inventory:
+    st.session_state.inventory.append("olmalinc_seq")
+if career_has_item("screenshot") and "omega_flag" not in st.session_state.inventory:
+    st.session_state.inventory.append("omega_flag")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -455,9 +472,14 @@ def sidebar():
             st.caption("Nothing collected yet.")
 
         st.markdown("---")
-        if st.button("↩ Restart", use_container_width=True):
+        render_inventory_sidebar()
+        st.markdown("---")
+        if st.button("↩ Restart this game", use_container_width=True):
+            preserve = st.session_state.get("career")
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
+            if preserve is not None:
+                st.session_state["career"] = preserve
             st.rerun()
 
 # ── Notifications ─────────────────────────────────────────────────────────────
@@ -655,14 +677,30 @@ def render_room_4(df):
         st.warning("Select exactly 3.")
     elif len(choices) == 3:
         correct = sum(1 for c in choices if FINAL_EVIDENCE[c]["correct"])
+
+        # NovaBridge bonus unlocks a parallel publishing option — fund the legal defense.
+        bonus_option = career_has_item("nb_bonus")
+        if bonus_option:
+            st.info("💵 Your NovaBridge Severance from the Analyst game ($32K) is available. You can wire it into the secure publishing infrastructure before posting — pre-paid hosting, retained counsel, legal defense fund.")
+            fund_legal = st.checkbox("Wire the severance into the publishing fund before posting", key="fund_legal")
+        else:
+            fund_legal = False
+
         if st.button("📤 Post to preprint server", use_container_width=True, type="primary"):
             st.session_state.escaped = True
             st.session_state.escape_outcome = correct
+            st.session_state.fund_legal = fund_legal
+            # Mark game complete with the appropriate ending
+            ending_label = ("escaped" if correct == 3 else "partial" if correct == 2 else "retracted")
+            if fund_legal:
+                ending_label = f"{ending_label}_funded"
+            mark_game_complete("lockdown", ending_label)
             st.rerun()
 
 # ── Win screen ────────────────────────────────────────────────────────────────
 
 def render_win(outcome):
+    funded = st.session_state.get("fund_legal", False)
     if outcome == 3:
         st.balloons()
         st.markdown("""
@@ -678,6 +716,17 @@ def render_win(outcome):
             </div>
         </div>
         """, unsafe_allow_html=True)
+        if funded:
+            st.markdown("""
+            <div style="background:#0a1a10;border-left:3px solid #22c55e;padding:1rem 1.2rem;border-radius:0 4px 4px 0;margin:1rem 0;color:#86efac">
+            <strong>The funded path.</strong><br><br>
+            NovaBridge's lawyers filed for retraction within twelve hours. Pre-paid counsel was already
+            waiting at the door. The motion was denied within seventy-two hours. The defense fund covered
+            the next eleven months of litigation. None of the authors went bankrupt. None of them lost
+            their jobs.<br><br>
+            <em>Their money paid for their own undoing. There is a poetry to that.</em>
+            </div>
+            """, unsafe_allow_html=True)
     elif outcome == 2:
         st.markdown("""
         <div class="win-banner" style="border-color:#854d0e;background:#1c1000">
