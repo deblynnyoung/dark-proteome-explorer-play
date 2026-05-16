@@ -226,6 +226,16 @@ ALL_ITEMS = {
 # key: frozenset of two item ids → result item id + narrative
 
 COMBINATIONS = {
+    frozenset({"report_pdf", "schema_doc"}): {
+        "result": "omega_flag",
+        "narrative": "The report is 847 KB — four times the normal size. "
+                     "The contractor schema doc lists 41 standard patient-facing fields. "
+                     "Cross-referencing the PDF metadata against each documented field leaves 14 unaccounted for. "
+                     "One of them is a single character: Ω. "
+                     "The field name is ORBLq_tier. "
+                     "Listed in the schema as 'Internal use only — not exposed to clinician interface.' "
+                     "Mara's report has it. And its value is unlike anything in the standard tier system.",
+    },
     frozenset({"omega_flag", "schema_doc"}): {
         "result": "decryption_key",
         "narrative": "The ORBLq_tier field appears in the schema doc under a vendor API section "
