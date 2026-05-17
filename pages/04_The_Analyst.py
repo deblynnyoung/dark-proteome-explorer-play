@@ -775,14 +775,31 @@ def chapter_5():
     st.markdown("##### Make your final decision")
     st.caption("Everything you've learned. Everything you've saved, or didn't. This is where it lands.")
 
-    # Final choice shapes ending
-    final = st.radio(
-        "What do you do?",
-        [
+    # Stay is only available if you were never flagged.
+    # If suspicion crossed 60 at any point, NovaBridge is already showing you the door —
+    # the "Stay" option doesn't make narrative sense.
+    if st.session_state.ever_flagged:
+        st.markdown(
+            '<div style="background:#1a0000;border-left:3px solid #ef4444;padding:0.6rem 0.9rem;border-radius:0 4px 4px 0;margin:0.5rem 0;color:#fca5a5;font-size:0.88rem">'
+            'You have already been flagged. There is no "staying" — Building C, Room 4, 9 AM tomorrow is not negotiable. '
+            'You can resign on your own terms tonight, or you can resign loudly.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        options = [
+            "B — Resign tonight. Return the company laptop. Say nothing publicly. Hope the data you saved reaches someone.",
+            "C — Resign and go public. Contact the journalists, the researchers, the Congressional offices. Use your name.",
+        ]
+    else:
+        options = [
             "A — Stay. Sign the updated NDA. Take the expanded role. The money is real.",
             "B — Resign. Return the company laptop. Say nothing publicly. Hope the data you saved reaches someone.",
             "C — Resign and go public. Contact the journalists, the researchers, the Congressional offices. Use your name.",
-        ],
+        ]
+
+    final = st.radio(
+        "What do you do?",
+        options,
         index=None,
         key="ch5_radio",
     )
@@ -910,7 +927,7 @@ def render_ending():
         )
 
         if vigilante_pattern_this_run:
-            if vigilante_unlocked():
+            if vigilante_unlocked() and not st.session_state.ever_flagged:
                 # All gates pass — show the button
                 st.markdown("""
                 <div style="background:#1c1000;border-left:3px solid #f59e0b;padding:1rem 1.2rem;border-radius:0 4px 4px 0;margin:1.5rem 0;color:#f59e0b">
@@ -930,9 +947,12 @@ def render_ending():
                     ("prior_run", c["completed_runs"] >= 1,
                      "Complete at least one other game before attempting this path",
                      "Play The Investigation or The Lockdown to completion (any ending), then come back."),
+                    ("not_flagged", not st.session_state.ever_flagged,
+                     "Never crossed the suspicion threshold (60) during this run",
+                     "Your suspicion spiked to 60+ at some point — clearance dropped, the exit interview was scheduled. The Vigilante can't have been flagged. Restart and keep aggregate suspicion lower (avoid investigating at every single step)."),
                     ("suspicion", (c.get("analyst_suspicion_at_end") or 0) < 30,
                      "Final suspicion under 30",
-                     f"Your suspicion this run was {c.get('analyst_suspicion_at_end') or 0}. Try keeping early choices more compliant."),
+                     f"Your suspicion this run ended at {c.get('analyst_suspicion_at_end') or 0}. Try keeping early choices more compliant."),
                     ("screenshot", has_item("screenshot"),
                      "📸 Query Log Screenshot in inventory",
                      "Choose C in Chapter 2 to save the screenshot."),
