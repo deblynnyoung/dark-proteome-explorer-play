@@ -9,35 +9,24 @@ decisions made in one game persist into the others.
 from __future__ import annotations
 
 import copy
-import json
 from pathlib import Path
 
 import streamlit as st
 
-# Save file lives in the working directory of `streamlit run`.
-# Best-effort persistence — survives browser close on local machines.
-# Streamlit Cloud's filesystem is ephemeral; the file disappears on app restart there.
-_SAVE_PATH = Path(".career_save.json")
-
-
-def _load_career_from_disk():
-    if _SAVE_PATH.exists():
-        try:
-            with _SAVE_PATH.open() as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError):
-            return None
-    return None
+# IMPORTANT: career state is per-session only (in-memory).
+# An earlier version wrote a JSON file to disk for cross-session persistence,
+# but that caused a privacy bug on Streamlit Cloud — multiple users hitting the
+# same deployed URL share the server's filesystem and would see each other's state.
+# Defensive cleanup on import to remove any stale file that may already exist:
+try:
+    Path(".career_save.json").unlink(missing_ok=True)
+except OSError:
+    pass
 
 
 def _save_career_to_disk():
-    if "career" not in st.session_state:
-        return
-    try:
-        with _SAVE_PATH.open("w") as f:
-            json.dump(st.session_state.career, f)
-    except OSError:
-        pass  # filesystem may be read-only — silent fail is fine
+    """No-op. Persistence intentionally disabled. See module docstring."""
+    pass
 
 # ── Item catalog ──────────────────────────────────────────────────────────────
 
@@ -121,15 +110,8 @@ _DEFAULT_CAREER = {
 
 def init_career():
     if "career" not in st.session_state:
-        saved = _load_career_from_disk()
-        if saved is not None:
-            # Merge with defaults so newer keys we add don't break old save files.
-            # Deep-copy defaults so inner lists/dicts aren't shared with the module-level constant.
-            merged = copy.deepcopy(_DEFAULT_CAREER)
-            merged.update(saved)
-            st.session_state.career = merged
-        else:
-            st.session_state.career = copy.deepcopy(_DEFAULT_CAREER)
+        # Deep-copy so inner lists/dicts aren't shared with the module-level constant.
+        st.session_state.career = copy.deepcopy(_DEFAULT_CAREER)
 
 # ── Item helpers ──────────────────────────────────────────────────────────────
 

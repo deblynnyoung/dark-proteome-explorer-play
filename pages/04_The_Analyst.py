@@ -843,12 +843,10 @@ def render_ending():
     moral = st.session_state.moral_score
     choices = st.session_state.choices
 
-    # Persist to shared career state.
+    # Update shared career state.
     # Suspicion is updated on every render so a Vigilante replay's gate doesn't
     # use a stale value from a previous Whistleblower run.
     st.session_state.career["analyst_suspicion_at_end"] = suspicion
-    from src.career import _save_career_to_disk as _save
-    _save()
 
     PATH_FOR_ENDING = {
         "stayed": "bystander",
