@@ -8,7 +8,35 @@ decisions made in one game persist into the others.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import streamlit as st
+
+# Save file lives in the working directory of `streamlit run`.
+# Best-effort persistence — survives browser close on local machines.
+# Streamlit Cloud's filesystem is ephemeral; the file disappears on app restart there.
+_SAVE_PATH = Path(".career_save.json")
+
+
+def _load_career_from_disk():
+    if _SAVE_PATH.exists():
+        try:
+            with _SAVE_PATH.open() as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return None
+    return None
+
+
+def _save_career_to_disk():
+    if "career" not in st.session_state:
+        return
+    try:
+        with _SAVE_PATH.open("w") as f:
+            json.dump(st.session_state.career, f)
+    except OSError:
+        pass  # filesystem may be read-only — silent fail is fine
 
 # ── Item catalog ──────────────────────────────────────────────────────────────
 
@@ -80,16 +108,26 @@ GAMES = {
 
 # ── State init ────────────────────────────────────────────────────────────────
 
+_DEFAULT_CAREER = {
+    "items": [],
+    "games_completed": {},          # game_id → ending_id
+    "paths_taken": [],              # list of path ids (ordered)
+    "completed_runs": 0,            # any-game completions, for Vigilante gating
+    "analyst_suspicion_at_end": None,
+    "yuna_encounter": None,         # "walked_away", "talked", "kept" — set in Analyst Ch3
+}
+
+
 def init_career():
     if "career" not in st.session_state:
-        st.session_state.career = {
-            "items": [],
-            "games_completed": {},          # game_id → ending_id
-            "paths_taken": [],              # list of path ids (ordered)
-            "completed_runs": 0,            # any-game completions, for Vigilante gating
-            "analyst_suspicion_at_end": None,
-            "yuna_encounter": None,         # "walked_away", "talked", "kept" — set in Analyst Ch3
-        }
+        saved = _load_career_from_disk()
+        if saved is not None:
+            # Merge with defaults so newer keys we add don't break old save files
+            merged = dict(_DEFAULT_CAREER)
+            merged.update(saved)
+            st.session_state.career = merged
+        else:
+            st.session_state.career = dict(_DEFAULT_CAREER)
 
 # ── Item helpers ──────────────────────────────────────────────────────────────
 
@@ -97,6 +135,7 @@ def add_item(item_id: str):
     init_career()
     if item_id in ITEMS and item_id not in st.session_state.career["items"]:
         st.session_state.career["items"].append(item_id)
+        _save_career_to_disk()
 
 def has_item(item_id: str) -> bool:
     init_career()
@@ -117,6 +156,7 @@ def mark_game_complete(game_id: str, ending_id: str, **extra):
     c["games_completed"][game_id] = ending_id
     for k, v in extra.items():
         c[k] = v
+    _save_career_to_disk()
 
 def has_completed(game_id: str) -> bool:
     init_career()
@@ -126,6 +166,7 @@ def mark_path(path_id: str):
     init_career()
     if path_id in PATHS and path_id not in st.session_state.career["paths_taken"]:
         st.session_state.career["paths_taken"].append(path_id)
+        _save_career_to_disk()
 
 def paths_taken() -> list[str]:
     init_career()

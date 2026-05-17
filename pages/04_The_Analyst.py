@@ -826,7 +826,13 @@ def render_ending():
     moral = st.session_state.moral_score
     choices = st.session_state.choices
 
-    # Persist to shared career state (idempotent — set once per run)
+    # Persist to shared career state.
+    # Suspicion is updated on every render so a Vigilante replay's gate doesn't
+    # use a stale value from a previous Whistleblower run.
+    st.session_state.career["analyst_suspicion_at_end"] = suspicion
+    from src.career import _save_career_to_disk as _save
+    _save()
+
     PATH_FOR_ENDING = {
         "stayed": "bystander",
         "flagged": "bystander",  # the "they knew" outcome is still in the bystander family
@@ -836,11 +842,11 @@ def render_ending():
     if "analyst" not in st.session_state.career["games_completed"]:
         # If you talked to Park AND chose to leak/contact her, that's the Confidant arc
         if has_item("park_trust") and (choices.get(4) == "C" or kind == "leak"):
-            mark_game_complete("analyst", "confidant", analyst_suspicion_at_end=suspicion)
+            mark_game_complete("analyst", "confidant")
             mark_path("confidant")
         else:
             path = PATH_FOR_ENDING.get(kind, "bystander")
-            mark_game_complete("analyst", kind, analyst_suspicion_at_end=suspicion)
+            mark_game_complete("analyst", kind)
             mark_path(path)
 
     st.markdown("---")
@@ -1311,15 +1317,17 @@ def chapter_6():
         # ── Chapter 7 unlock — requires items from MULTIPLE playthroughs ─────
         # Keycard and Trust are mutually exclusive in one Yuna encounter, so
         # having both means the player has run The Analyst on at least two paths.
-        ch7_eligible = (
-            st.session_state.ch6_done
-            and has_item("park_keycard")
-            and has_item("park_trust")
-            and has_item("screenshot")
-            and has_item("nb_bonus")
-        )
+        ch7_requirements = [
+            ("park_keycard",          "🪪", "Dr. Park's Keycard",      "Pocket the keycard in the Yuna lobby scene (Vigilante path)"),
+            ("park_trust",            "🤝", "Dr. Park's Trust",         "Return the keycard AND stop to talk to her (Confidant path — requires a separate Analyst run)"),
+            ("screenshot",            "📸", "Query Log Screenshot",     "Choose to screenshot the queries in Chapter 2 (Vigilante or Whistleblower path)"),
+            ("nb_bonus",              "💵", "NovaBridge Severance",     "Choose to Stay at the end of Chapter 5 (Bystander or Vigilante path)"),
+        ]
+        ch7_have = [k for k, *_ in ch7_requirements if has_item(k)]
+        ch7_eligible = st.session_state.ch6_done and len(ch7_have) == 4
+
+        st.markdown("---")
         if ch7_eligible:
-            st.markdown("---")
             st.markdown("""
             <div class="memo" style="border-color:#22c55e;background:#0a1a10">
             <div class="memo-header" style="color:#22c55e">Federal Subpoena // Eight Months Later</div>
@@ -1333,6 +1341,19 @@ def chapter_6():
             if st.button("⚖ Take the witness box", key="ch7_enter", type="primary", use_container_width=True):
                 st.session_state.chapter = 7
                 st.rerun()
+        else:
+            with st.expander("📜 Witness Box readiness", expanded=True):
+                st.markdown(
+                    "A second secret level exists. It requires items from **multiple Analyst playthroughs** "
+                    "(the keycard and the trust are mutually exclusive in one Yuna scene). The Investigation "
+                    "Dossier from a perfect Investigation run unlocks an additional question option in the "
+                    "courtroom, but is not required to enter."
+                )
+                for key, icon, name, how in ch7_requirements:
+                    if has_item(key):
+                        st.markdown(f"- ✓ {icon} **{name}**")
+                    else:
+                        st.markdown(f"- ✗ {icon} **{name}** — *{how}*")
 
         st.markdown("---")
         if st.button("↩ Return to career hub", use_container_width=True):

@@ -8,3 +8,4 @@ __pycache__/
 *.xlsx
 *.csv
 !data/41586_2026_10459_MOESM9_ESM_structural_predictions.csv
+.career_save.json
