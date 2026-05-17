@@ -79,6 +79,14 @@ with st.sidebar:
     st.markdown(f"**Completed runs:** {c['completed_runs']}")
     if st.button("↩ Reset career", use_container_width=True):
         del st.session_state["career"]
+        # Also delete the disk save so init_career doesn't immediately restore it
+        from pathlib import Path
+        p = Path(".career_save.json")
+        if p.exists():
+            try:
+                p.unlink()
+            except OSError:
+                pass
         st.rerun()
 
 # ── Title ─────────────────────────────────────────────────────────────────────

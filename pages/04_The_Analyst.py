@@ -908,18 +908,48 @@ def render_ending():
             and st.session_state.choices.get(4) != "C"      # don't contact Park (stay clean)
             and st.session_state.choices.get(5) == "A"      # stay
         )
-        if vigilante_unlocked() and vigilante_pattern_this_run:
-            st.markdown("""
-            <div style="background:#1c1000;border-left:3px solid #f59e0b;padding:1rem 1.2rem;border-radius:0 4px 4px 0;margin:1.5rem 0;color:#f59e0b">
-            <strong>You stayed. You also still have her keycard. And the screenshot. And the bonus.</strong>
-            <br><br>
-            <span style="color:#cbd5e1;font-style:italic">Last Tuesday you found a second partition.</span>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("→ Six months later", key="vigilante_enter", type="primary", use_container_width=True):
-                st.session_state.ended = False
-                st.session_state.chapter = 6
-                st.rerun()
+
+        if vigilante_pattern_this_run:
+            if vigilante_unlocked():
+                # All gates pass — show the button
+                st.markdown("""
+                <div style="background:#1c1000;border-left:3px solid #f59e0b;padding:1rem 1.2rem;border-radius:0 4px 4px 0;margin:1.5rem 0;color:#f59e0b">
+                <strong>You stayed. You also still have her keycard. And the screenshot. And the bonus.</strong>
+                <br><br>
+                <span style="color:#cbd5e1;font-style:italic">Last Tuesday you found a second partition.</span>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("→ Six months later", key="vigilante_enter", type="primary", use_container_width=True):
+                    st.session_state.ended = False
+                    st.session_state.chapter = 6
+                    st.rerun()
+            else:
+                # Pattern matches but other gates fail — show readiness panel
+                c = st.session_state.career
+                ch6_requirements = [
+                    ("prior_run", c["completed_runs"] >= 1,
+                     "Complete at least one other game before attempting this path",
+                     "Play The Investigation or The Lockdown to completion (any ending), then come back."),
+                    ("suspicion", (c.get("analyst_suspicion_at_end") or 0) < 30,
+                     "Final suspicion under 30",
+                     f"Your suspicion this run was {c.get('analyst_suspicion_at_end') or 0}. Try keeping early choices more compliant."),
+                    ("screenshot", has_item("screenshot"),
+                     "📸 Query Log Screenshot in inventory",
+                     "Choose C in Chapter 2 to save the screenshot."),
+                    ("keycard", has_item("park_keycard"),
+                     "🪪 Park's Keycard in inventory",
+                     "Choose C in the Yuna lobby scene to pocket the keycard."),
+                    ("bonus", has_item("nb_bonus"),
+                     "💵 NovaBridge Severance in inventory",
+                     "Choose to Stay in Chapter 5 (which you did, since you're on this ending)."),
+                ]
+                with st.expander("📜 You found the right pattern. But the door is not open yet.", expanded=True):
+                    st.markdown("Your choices this run matched a hidden path. To enter it, all of the following must also be true:")
+                    for key, met, desc, hint in ch6_requirements:
+                        if met:
+                            st.markdown(f"- ✓ {desc}")
+                        else:
+                            st.markdown(f"- ✗ {desc} — *{hint}*")
 
     elif kind == "flagged":
         st.markdown("""

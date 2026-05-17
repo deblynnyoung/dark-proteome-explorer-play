@@ -8,6 +8,7 @@ decisions made in one game persist into the others.
 """
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -122,12 +123,13 @@ def init_career():
     if "career" not in st.session_state:
         saved = _load_career_from_disk()
         if saved is not None:
-            # Merge with defaults so newer keys we add don't break old save files
-            merged = dict(_DEFAULT_CAREER)
+            # Merge with defaults so newer keys we add don't break old save files.
+            # Deep-copy defaults so inner lists/dicts aren't shared with the module-level constant.
+            merged = copy.deepcopy(_DEFAULT_CAREER)
             merged.update(saved)
             st.session_state.career = merged
         else:
-            st.session_state.career = dict(_DEFAULT_CAREER)
+            st.session_state.career = copy.deepcopy(_DEFAULT_CAREER)
 
 # ── Item helpers ──────────────────────────────────────────────────────────────
 
@@ -251,3 +253,13 @@ def render_inventory_sidebar(show_paths: bool = True):
                     f'<div class="career-path">{meta["icon"]} {meta["name"]}</div>',
                     unsafe_allow_html=True,
                 )
+
+    # Diagnostic inspector — quietly available, off by default
+    with st.expander("⚙ Inspect career state", expanded=False):
+        c = st.session_state.career
+        st.markdown(f"**Completed runs:** {c['completed_runs']}")
+        st.markdown(f"**Games completed:** {dict(c['games_completed']) or 'none'}")
+        st.markdown(f"**Items:** {c['items'] or 'none'}")
+        st.markdown(f"**Paths taken:** {c['paths_taken'] or 'none'}")
+        st.markdown(f"**Analyst suspicion at end:** {c.get('analyst_suspicion_at_end')}")
+        st.markdown(f"**Yuna encounter:** {c.get('yuna_encounter')}")
