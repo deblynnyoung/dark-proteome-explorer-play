@@ -140,6 +140,7 @@ def _init():
         "ch4_done": False,
         "ch5_done": False,
         "ch6_done": False,
+        "ch7_done": False,
         "yuna_done": False,   # Ch3 lobby encounter resolved
         "examined": [],
         "ended": False,
@@ -465,24 +466,26 @@ def yuna_encounter():
     <div class="memo">
     On your way back from the third-floor cafeteria, you cross the NovaBridge atrium.
     A woman ahead of you fumbles with a stack of folders, a coffee, and a visitor's
-    keycard on a lanyard. The lanyard slips off. The keycard skitters across the marble
-    and lands at your foot.
+    keycard on a lanyard. The lanyard slips off the coffee tray; the keycard skitters
+    across the marble and lands behind a row of planters near your feet. The folders
+    fan out across the floor. She kneels to gather them, her back to you, swearing softly.
     <br><br>
-    You pick it up. The badge photo is hers.
+    You stop at the planters. The keycard is right there. You pick it up.
+    The badge photo is hers — the same face you'd recognize across a room.
     <br><br>
     <strong style="color:#cbd5e1">Dr. Yuna Park</strong><br>
     <span style="color:#64748b">Langley-Stanford Institute for Genomic Medicine — Visiting</span>
     <br><br>
-    She turns, sees you holding it, and starts walking back. "Oh — thank you."
+    She hasn't looked up yet.
     </div>
     """, unsafe_allow_html=True)
 
     choice = st.radio(
         "What do you do?",
         [
-            "A — Hand it back, smile, walk away. You have a meeting at 2.",
-            "B — Hand it back, ask what brings her to NovaBridge. Stay for a minute.",
-            "C — Pocket it. Apologize, say you'll turn it in at the front desk. Don't.",
+            "A — Step around the planters. \"Excuse me — I think this is yours.\" Hand it back, smile, walk on.",
+            "B — Step around the planters. Hand it back. Ask what brings her to NovaBridge. Stay for a minute.",
+            "C — Slip it into your jacket pocket. Walk past her on the other side of the planters. By the time she straightens up, you're already at the elevators.",
         ],
         index=None,
         key="yuna_radio",
@@ -490,19 +493,19 @@ def yuna_encounter():
 
     if choice:
         if choice.startswith("A"):
-            st.markdown('<div class="doc-block">You hand it back. She thanks you. The interaction lasts six seconds. You don\'t exchange names.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="doc-block">She looks up, surprised. She thanks you twice. The interaction lasts maybe ten seconds. You don\'t exchange names.</div>', unsafe_allow_html=True)
             st.session_state.career["yuna_encounter"] = "walked_away"
             delta_s, delta_m = 0, 0
         elif choice.startswith("B"):
-            st.markdown('<div class="doc-block flagged">You hand it back. She introduces herself — Yuna. You\'re here for a talk on HLA Class I bioinformatics, she says. NovaBridge invited me to consult.<br><br>She watches your face carefully when you say you work in Lattice Analytics. Something in her expression shifts. She gives you her university email before she leaves. <em>"In case you ever want to compare notes."</em> <em style="color:#22c55e">🤝 Dr. Park\'s Trust added to your inventory.</em></div>', unsafe_allow_html=True)
+            st.markdown('<div class="doc-block flagged">She looks up, surprised. You hand it back. She introduces herself — Yuna. She\'s here for a talk on HLA Class I bioinformatics, she says. NovaBridge invited her to consult.<br><br>She watches your face carefully when you say you work in Lattice Analytics. Something in her expression shifts. She gives you her university email before she leaves. <em>"In case you ever want to compare notes."</em> <em style="color:#22c55e">🤝 Dr. Park\'s Trust added to your inventory.</em></div>', unsafe_allow_html=True)
             st.session_state.career["yuna_encounter"] = "talked"
             add_item("park_trust")
             delta_s, delta_m = +5, +15
         else:
-            st.markdown('<div class="doc-block flagged">"I think I dropped it back near the elevators," you say. "I\'ll turn it in at the front desk on my way out." She hesitates, then thanks you. You don\'t turn it in.<br><br>The magnetic strip is active for another 48 hours before her institution deactivates it. Standard procedure. By then, you\'ve copied it. <em style="color:#22c55e">🪪 Dr. Park\'s Keycard added to your inventory.</em></div>', unsafe_allow_html=True)
+            st.markdown('<div class="doc-block flagged">She doesn\'t see you take it. By the time she\'s gathered her folders and started looking for the keycard, you\'re already in the elevator.<br><br>The magnetic strip stays active for 48 hours before her institution flags it missing and deactivates the credential. Plenty of time to clone the magnetic stripe and the embedded RFID. <em style="color:#22c55e">🪪 Dr. Park\'s Keycard added to your inventory.</em></div>', unsafe_allow_html=True)
             st.session_state.career["yuna_encounter"] = "kept"
             add_item("park_keycard")
-            delta_s, delta_m = +10, -5  # ambiguous morally — you stole, but quietly
+            delta_s, delta_m = +10, -5  # ambiguous morally — you stole, but cleanly
 
         record_choice("yuna", choice[0], delta_s, delta_m)
 
@@ -1305,8 +1308,315 @@ def chapter_6():
             st.session_state.ch6_done = True
             st.balloons()
 
+        # ── Chapter 7 unlock — requires items from MULTIPLE playthroughs ─────
+        # Keycard and Trust are mutually exclusive in one Yuna encounter, so
+        # having both means the player has run The Analyst on at least two paths.
+        ch7_eligible = (
+            st.session_state.ch6_done
+            and has_item("park_keycard")
+            and has_item("park_trust")
+            and has_item("screenshot")
+            and has_item("nb_bonus")
+        )
+        if ch7_eligible:
+            st.markdown("---")
+            st.markdown("""
+            <div class="memo" style="border-color:#22c55e;background:#0a1a10">
+            <div class="memo-header" style="color:#22c55e">Federal Subpoena // Eight Months Later</div>
+            You have collected what only multiple lives can collect: her trust <em>and</em> her keycard.
+            The screenshot <em>and</em> the bonus. The Confidant and the Vigilante in the same person.
+            <br><br>
+            Last Tuesday a federal subpoena arrived in a manila envelope.
+            <strong>United States v. NovaBridge Systems, Inc.</strong> The prosecution wants you on the stand.
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("⚖ Take the witness box", key="ch7_enter", type="primary", use_container_width=True):
+                st.session_state.chapter = 7
+                st.rerun()
+
         st.markdown("---")
         if st.button("↩ Return to career hub", use_container_width=True):
+            st.switch_page("app.py")
+
+
+# ── Chapter 7 — The Witness Box (second secret level) ────────────────────────
+
+TESTIMONY = {
+    1: {
+        "question": "Did you knowingly copy NovaBridge's proprietary data without authorization?",
+        "options": {
+            "concede": {
+                "label": "Yes. I copied it. I would do it again.",
+                "requires": None,
+                "potency": 1,
+                "follow": "The prosecution looks down at their notes. The judge writes something. The jury looks at you, not at NovaBridge.",
+            },
+            "screenshot": {
+                "label": "I documented unauthorized surveillance of 558 patients across two cohorts. What I copied was already a crime.",
+                "requires": "screenshot",
+                "potency": 2,
+                "follow": "Defense attorney pivots, but the framing is broken. The jury is now looking at NovaBridge's table. One of their lawyers writes something. The other one stops writing.",
+            },
+            "fifth": {
+                "label": "On advice of counsel, I decline to answer.",
+                "requires": None,
+                "potency": 0,
+                "follow": "Your attorney nods. The defense moves on too quickly — they preferred a denial. The jury remembers the silence.",
+            },
+        },
+    },
+    2: {
+        "question": "How did you come to know Dr. Yuna Park?",
+        "options": {
+            "brief": {
+                "label": "She dropped her keycard in our lobby. We spoke for two minutes.",
+                "requires": None,
+                "potency": 1,
+                "follow": "Truthful. Minimal. The defense moves on too quickly — they wanted more.",
+            },
+            "trust": {
+                "label": "She is a colleague. We have been corresponding since the day she gave me her university email in that lobby.",
+                "requires": "park_trust",
+                "potency": 2,
+                "follow": "Dr. Park is in the gallery. She nods once. The defense attorney pauses, choosing the next question carefully.",
+            },
+            "fifth": {
+                "label": "On advice of counsel, I decline.",
+                "requires": None,
+                "potency": 0,
+                "follow": "The judge frowns. The defense has scored a point and they know it.",
+            },
+        },
+    },
+    3: {
+        "question": "Why did you wait six months before acting on what you knew?",
+        "options": {
+            "honest": {
+                "label": "I was afraid. I documented for six months. When I found the second cohort, I acted.",
+                "requires": None,
+                "potency": 1,
+                "follow": "Honest. The jury can do the math themselves.",
+            },
+            "bonus": {
+                "label": "I was being paid to stay quiet. I'm telling you so under oath, with the bank records already in evidence.",
+                "requires": "nb_bonus",
+                "potency": 2,
+                "follow": "The bank statements are read into the record. The retention bonus. The performance bonuses. The 18% over-target year-end. NovaBridge's complicity becomes part of the story, not just the backdrop.",
+            },
+            "fifth": {
+                "label": "On advice of counsel, I decline.",
+                "requires": None,
+                "potency": 0,
+                "follow": "The jury notes this. NovaBridge's attorneys exchange a look.",
+            },
+        },
+    },
+    4: {
+        "question": "Are you aware that some of your evidence cannot be independently authenticated?",
+        "options": {
+            "concede": {
+                "label": "Yes. The chain of custody on some files is contested.",
+                "requires": None,
+                "potency": 1,
+                "follow": "Honest concession. The defense doesn't get the lever they were reaching for.",
+            },
+            "dossier": {
+                "label": "The peer-reviewed dossier was reproduced by three independent labs within ten days of posting. The core findings authenticate themselves.",
+                "requires": "investigation_dossier",
+                "potency": 2,
+                "follow": "The dossier is admitted as exhibit. The replication certifications follow. The defense doesn't argue further.",
+            },
+            "fifth": {
+                "label": "On advice of counsel, I decline.",
+                "requires": None,
+                "potency": 0,
+                "follow": "The defense smiles slightly. The jury notes the silence.",
+            },
+        },
+    },
+    5: {
+        "question": "NovaBridge maintains that no patients were harmed by their procedures. What is your response?",
+        "options": {
+            "plain": {
+                "label": "Nineteen people were marked COMPLETED in the OMEGA cohort. Twenty-two in KAPPA. They were not harmed?",
+                "requires": None,
+                "potency": 1,
+                "follow": "The courtroom is silent. The prosecutor lets it sit.",
+            },
+            "aria": {
+                "label": "May I read four things into the record? [unlocked: full inventory]",
+                "requires": "_all_five",
+                "potency": 3,
+                "follow": (
+                    "You read for eleven minutes. "
+                    "The screenshot's metadata, dated months before the trial began. "
+                    "Dr. Park's first email back to you, timestamped at 11:34 PM on the night of the lobby. "
+                    "The bank statements showing every dollar of NovaBridge's retention payments. "
+                    "The dossier's reproducibility certifications from Stanford, Cambridge, and Tsukuba. "
+                    "And then a list. Forty-one names. The ones who would be COMPLETED if you'd waited one more month. "
+                    "<br><br>"
+                    "The courtroom does not breathe. The judge does not stop you. "
+                    "The verdict is reached in forty minutes."
+                ),
+            },
+            "fifth": {
+                "label": "On advice of counsel, I decline.",
+                "requires": None,
+                "potency": 0,
+                "follow": "The defense smiles. The prosecutor closes her folder. The jury is sent out.",
+            },
+        },
+    },
+}
+
+
+def _has_all_five():
+    """Special sentinel check for the Q5 aria — requires all five career items."""
+    return all(has_item(i) for i in ("screenshot", "park_keycard", "park_trust", "nb_bonus", "investigation_dossier"))
+
+
+def _resolve_testimony(answers):
+    """Compute outcome from the 5 chosen answer keys."""
+    total = sum(TESTIMONY[q]["options"][ans]["potency"] for q, ans in answers.items())
+    used_aria = answers.get(5) == "aria"
+    fifth_count = sum(1 for ans in answers.values() if ans == "fifth")
+
+    if used_aria and total >= 9:
+        name, tone = "The Reckoning", "reckoning"
+    elif total >= 7:
+        name, tone = "The Testimony", "testimony"
+    elif fifth_count >= 4:
+        name, tone = "The Survivor", "survivor"
+    elif total <= 3:
+        name, tone = "The Defendant", "defendant"
+    else:
+        name, tone = "The Honest Witness", "witness"
+
+    EPILOGUES = {
+        "reckoning": (
+            "The jury returns in forty minutes. Guilty on twelve of fourteen counts.<br><br>"
+            "NovaBridge's stock is halted before the verdict is read. By the next morning, "
+            "the company is in receivership. The Phase I cohort is dismantled. The Phase II "
+            "is too. Three executives accept plea deals to avoid criminal prosecution; two go to trial "
+            "and are convicted within the year.<br><br>"
+            "You testify in seven additional cases. You write a book. You don't go to prison; "
+            "your prosecution is dropped within a month of the verdict, in recognition of cooperation. "
+            "Dr. Park dedicates her next paper to you. You read it on a flight to Geneva, where you "
+            "are speaking at a regulatory conference on data-infrastructure ethics.<br><br>"
+            "Eight years later, a young analyst at a different company writes to you. "
+            "You write back the same evening."
+        ),
+        "testimony": (
+            "Guilty on seven of fourteen counts. The damaging counts. NovaBridge dissolves within "
+            "six months. The compounds are pulled. The 558 people are not on a list anymore.<br><br>"
+            "Your own prosecution is reduced to a misdemeanor; you serve no time. Your name appears "
+            "in journals and in headlines. You don't write a book. You go back to data work, "
+            "for a different kind of institution. You sleep, mostly."
+        ),
+        "witness": (
+            "Guilty on three counts; not guilty on the remainder. NovaBridge pays a $400M penalty "
+            "and a consent decree. The compounds are pulled. The cohorts are dismantled.<br><br>"
+            "Your testimony was honest but uneven. The defense made hay of the gaps. You face a "
+            "trade-secrets civil suit which is eventually settled. You move to a different city. "
+            "You still get letters, sometimes, from people who say the case mattered to them."
+        ),
+        "survivor": (
+            "The trial ends in a mistrial. NovaBridge accepts a sealed plea agreement; the terms "
+            "are not made public. The Phase II cohort is quietly disbanded over six months. "
+            "There is no verdict, no headline, no closure.<br><br>"
+            "You are not prosecuted. The Fifth Amendment, used five times, did its work. "
+            "You receive no congratulations and no condemnation. You go home. "
+            "Sometimes you wonder what would have happened if you'd answered the questions."
+        ),
+        "defendant": (
+            "The defense built its case on your silences. You spend more time defending your own "
+            "conduct than NovaBridge spends defending theirs. The jury hangs.<br><br>"
+            "NovaBridge settles civilly for $50M and admits no wrongdoing. The compounds are quietly "
+            "rebranded. Your own prosecution proceeds — felony charges, plea-bargained down to "
+            "eighteen months suspended. You don't go to prison. You don't go back to data work, either."
+        ),
+    }
+    return name, EPILOGUES[tone], total
+
+
+def chapter_7():
+    st.markdown('<div class="chapter-header">Chapter 7 — Hidden</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chapter-title">The Witness Box</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="memo">
+    <div class="memo-header">United States v. NovaBridge Systems, Inc. // Federal District Court // Day 11 of Trial</div>
+    You wear a navy suit you bought specifically for this. The bailiff swears you in.
+    Dr. Park is in the gallery, three rows back, with two of her co-authors.
+    NovaBridge's defense team has five questions for you. The jury has been instructed
+    that they may consider the manner of your responses, not just the content.
+    </div>
+    """, unsafe_allow_html=True)
+
+    answers = {}
+    for q_id, q in TESTIMONY.items():
+        st.markdown("---")
+        st.markdown(f'<div class="chapter-header">Question {q_id} of 5</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:1.05rem;font-weight:700;color:#f1f5f9;margin-bottom:0.8rem;line-height:1.5">{q["question"]}</div>', unsafe_allow_html=True)
+
+        # Filter options: gated by item OR by special _all_five check
+        available = []
+        for opt_key, opt in q["options"].items():
+            req = opt["requires"]
+            if req is None:
+                ok = True
+            elif req == "_all_five":
+                ok = _has_all_five()
+            else:
+                ok = has_item(req)
+            if ok:
+                available.append((opt_key, opt))
+
+        labels = [opt["label"] for _, opt in available]
+        keys = [k for k, _ in available]
+
+        pick = st.radio(
+            f"Answer for Q{q_id}",
+            labels,
+            index=None,
+            key=f"ch7_q{q_id}_radio",
+            label_visibility="collapsed",
+        )
+        if pick is not None:
+            pick_key = keys[labels.index(pick)]
+            answers[q_id] = pick_key
+            st.caption(f"↳ {available[labels.index(pick)][1]['follow']}")
+
+    # Resolution
+    if len(answers) == 5:
+        st.markdown("---")
+        if st.button("⚖ Deliver testimony", key="ch7_deliver", type="primary", use_container_width=True):
+            st.session_state.ch7_result = answers
+            st.rerun()
+
+    if st.session_state.get("ch7_result"):
+        result = st.session_state.ch7_result
+        name, epilogue, total = _resolve_testimony(result)
+
+        st.markdown("---")
+        st.markdown(
+            f'<div style="text-align:center;margin:1rem 0">'
+            f'<div style="font-size:0.7rem;letter-spacing:0.3em;color:#64748b;text-transform:uppercase">Verdict Tone</div>'
+            f'<div style="font-size:2rem;font-weight:900;color:#22c55e;margin-top:0.2rem">{name}</div>'
+            f'<div style="font-size:0.85rem;color:#94a3b8;margin-top:0.2rem">Testimony potency: {total} / 11</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(f'<div class="ending-block leak">{epilogue}</div>', unsafe_allow_html=True)
+
+        if not st.session_state.get("ch7_done"):
+            outcome_id = "witness_" + "_".join(result[q] for q in sorted(result.keys()))
+            mark_game_complete("analyst", outcome_id, analyst_suspicion_at_end=st.session_state.suspicion)
+            st.session_state.ch7_done = True
+            st.balloons()
+
+        st.markdown("---")
+        if st.button("↩ Return to career hub", key="ch7_return", use_container_width=True):
             st.switch_page("app.py")
 
 
@@ -1334,5 +1644,7 @@ def main():
         chapter_5()
     elif ch == 6:
         chapter_6()
+    elif ch == 7:
+        chapter_7()
 
 main()
