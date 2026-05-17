@@ -891,7 +891,15 @@ def render_ending():
         """, unsafe_allow_html=True)
 
         # Secret path unlock — Vigilante
-        if vigilante_unlocked():
+        # Strict gate: the player must have made the Vigilante pattern THIS run,
+        # not just have the items lingering in career inventory from a previous run.
+        vigilante_pattern_this_run = (
+            st.session_state.choices.get(2) == "C"          # screenshot the log
+            and st.session_state.choices.get("yuna") == "C" # pocket the keycard
+            and st.session_state.choices.get(4) != "C"      # don't contact Park (stay clean)
+            and st.session_state.choices.get(5) == "A"      # stay
+        )
+        if vigilante_unlocked() and vigilante_pattern_this_run:
             st.markdown("""
             <div style="background:#1c1000;border-left:3px solid #f59e0b;padding:1rem 1.2rem;border-radius:0 4px 4px 0;margin:1.5rem 0;color:#f59e0b">
             <strong>You stayed. You also still have her keycard. And the screenshot. And the bonus.</strong>
@@ -993,116 +1001,313 @@ def render_ending():
 
 # ── Chapter 6 — The Vigilante ─────────────────────────────────────────────────
 
+# ── Heist objective catalog (used by Chapter 6) ──────────────────────────────
+
+HEIST_OBJECTIVES = {
+    "extract": {
+        "title": "Extract KAPPA_COHORT",
+        "subtitle": (
+            "The new partition lives on Lattice's primary cluster. An automated audit will detect "
+            "unauthorized reads at 6:00 AM. You have one shot."
+        ),
+        "options": {
+            "live": {
+                "label": "Pull through your authenticated NovaBridge session",
+                "requires": None,
+                "score": 1,
+                "tag": "fast",
+                "inline": "Fastest. Highest fingerprint. Your employee ID is on every query.",
+            },
+            "mirror": {
+                "label": "Mirror via Langley-Stanford's cross-institutional pipe",
+                "requires": "park_keycard",
+                "score": 2,
+                "tag": "clean",
+                "inline": "Slower. Cloned keycard authenticates the pull as cross-institutional research traffic.",
+            },
+            "skip": {
+                "label": "Don't extract — the OMEGA data you already have is enough",
+                "requires": None,
+                "score": 0,
+                "tag": "partial",
+                "inline": "No new risk. No proof of the second cohort. The 211 people stay invisible in the story.",
+            },
+        },
+    },
+    "publish": {
+        "title": "Reach a publishing channel",
+        "subtitle": (
+            "The data is meaningless if it sits on your drive. Pick how it gets into hands that can move it."
+        ),
+        "options": {
+            "dump": {
+                "label": "Public Tor mirror, no coordination",
+                "requires": None,
+                "score": 1,
+                "tag": "raw",
+                "inline": "Fastest. File metadata is sloppy. Privacy advocates will be unhappy.",
+            },
+            "park": {
+                "label": "Send to Park with a full cover letter and the original log archive",
+                "requires": "screenshot",
+                "score": 2,
+                "tag": "coordinated",
+                "inline": "She knows what to do with this. She has standing you'll never have.",
+            },
+            "ftp": {
+                "label": "Upload to Langley-Stanford's collaborative FTP as cross-lab transfer",
+                "requires": "park_keycard",
+                "score": 2,
+                "tag": "institutional",
+                "inline": "Disguised as a normal dataset share. Institutional credibility, no public dump signal.",
+            },
+        },
+    },
+    "protect": {
+        "title": "Cover your tracks",
+        "subtitle": "NovaBridge will trace this. Decide how much of you they find at the end of the thread.",
+        "options": {
+            "hide": {
+                "label": "Stay quiet. Your compliance record is your shield.",
+                "requires": None,
+                "score": 1,
+                "tag": "hidden",
+                "inline": "Free. Works until it doesn't. Six months from now, your name might come up.",
+            },
+            "fund": {
+                "label": "Wire the severance into legal defense + cleanup infrastructure ($32K)",
+                "requires": "nb_bonus",
+                "score": 2,
+                "tag": "funded",
+                "inline": "Pre-paid counsel on retainer. Pre-paid hosting. Their money paid for the cleanup.",
+            },
+            "resign": {
+                "label": "Quit publicly tonight. Resign with a written statement.",
+                "requires": None,
+                "score": 1,
+                "tag": "exposed",
+                "inline": "You become the story. The data is no longer alone — but the heat is on you.",
+            },
+        },
+    },
+}
+
+
+def _resolve_heist(extract, publish, protect):
+    """Map a choice combination to a named outcome + epilogue."""
+    combo = (extract, publish, protect)
+    score = (
+        HEIST_OBJECTIVES["extract"]["options"][extract]["score"]
+        + HEIST_OBJECTIVES["publish"]["options"][publish]["score"]
+        + HEIST_OBJECTIVES["protect"]["options"][protect]["score"]
+    )
+
+    # Specific named combos
+    NAMED = {
+        ("mirror", "ftp",  "fund"):   ("The Architect", "perfect"),
+        ("mirror", "park", "fund"):   ("The Conduit",   "coordinated"),
+        ("mirror", "ftp",  "resign"): ("The Witness",   "witness"),
+        ("mirror", "park", "resign"): ("The Witness",   "witness"),
+        ("live",   "dump", "hide"):   ("The Detonation","detonation"),
+        ("live",   "dump", "resign"): ("The Detonation","detonation"),
+        ("skip",   "dump", "hide"):   ("The Bystander Returns", "halfhearted"),
+        ("skip",   "park", "fund"):   ("The Quiet Hand","quiet"),
+        ("skip",   "ftp",  "fund"):   ("The Quiet Hand","quiet"),
+    }
+    if combo in NAMED:
+        name, tone = NAMED[combo]
+    elif score >= 5:
+        name, tone = "The Operator", "clean"
+    elif score >= 3:
+        name, tone = "The Catalyst", "messy"
+    else:
+        name, tone = "The Hesitation", "incomplete"
+
+    EPILOGUES = {
+        "perfect": (
+            "You let yourself into the Langley-Stanford genomics building at 2:14 AM with the cloned badge. "
+            "You mirror the KAPPA_COHORT partition through their cross-institutional pipe — it logs as routine "
+            "research traffic. The screenshot, the schema, the NL-7-VAR brief, and the new cohort all upload to "
+            "their collaborative FTP under the metadata of a normal cross-lab transfer. You walk out at 2:31 AM. "
+            "<br><br>"
+            "The preprint posts six weeks later. The supplementary data references 'an anonymous institutional "
+            "source.' NovaBridge's internal investigation looks at every employee who has ever visited "
+            "Langley-Stanford. There are none.<br><br>"
+            "Pre-paid counsel was already on retainer when the subpoena arrived. The motion was denied within "
+            "seventy-two hours. The compound is pulled. The 211 people are not on a list anymore.<br><br>"
+            "You receive a Q3 raise. You accept it."
+        ),
+        "coordinated": (
+            "You mirror KAPPA_COHORT through Langley-Stanford at 2 AM. Then, from your personal device, "
+            "you write to Park. You attach the screenshot — eight months of automated queries — as proof "
+            "of chain of custody. She replies in eleven minutes: <em>I remember you. I'm forwarding this. "
+            "Stay near your phone.</em><br><br>"
+            "The joint preprint posts six weeks later. Your name is on it. NovaBridge sues. "
+            "Pre-paid counsel files for dismissal. The case is dismissed eleven months later. "
+            "Three years from now you teach a guest seminar at Langley-Stanford on ethical data "
+            "infrastructure. You introduce yourself by your first name."
+        ),
+        "witness": (
+            "You execute the operation, then write a four-paragraph resignation letter and email it to "
+            "every member of NovaBridge's board. You attach the same archive you uploaded to Langley-Stanford. "
+            "You CC two journalists you'd been corresponding with anonymously for three months. "
+            "<br><br>"
+            "By morning, the story is everywhere. By afternoon, you are everywhere. "
+            "You testify before Congress eight months later. You wear a navy suit you bought specifically "
+            "for the occasion. The transcript runs four hundred pages. "
+            "<br><br>"
+            "The compound is pulled. The 211 people are not on a list anymore. Neither are you, in the way "
+            "that matters."
+        ),
+        "detonation": (
+            "At 3:47 AM you push every file to a public mirror. No coordination, no journalists, no Park. "
+            "The mirror is Tor-fronted but the metadata isn't. NovaBridge's forensics team pulls authorship "
+            "signatures from the file headers within seventy-two hours.<br><br>"
+            "The story breaks. The story is real. The story is also messy — the raw query log includes "
+            "patient identifiers that should have been scrubbed. Privacy advocates condemn the leaker. "
+            "NovaBridge sues for trade secret theft. You can't afford to fight. The compound is pulled. "
+            "211 people are off the list. Your name is in the wrong public records for the rest of your life."
+        ),
+        "quiet": (
+            "You don't pull KAPPA_COHORT. You don't risk the second cohort. What you have — the OMEGA "
+            "data, the schema, the compound brief — is enough. You route it carefully, and you fund the "
+            "infrastructure that protects everyone downstream.<br><br>"
+            "The preprint posts six weeks later. It is narrower than it could have been. The 211 people "
+            "in the second cohort are not in the public story. But the program is exposed enough that "
+            "NovaBridge can't safely continue it. The Phase I trial stays suspended. The cohort goes quiet.<br><br>"
+            "You are never named. You never visit a courtroom. You sleep, mostly."
+        ),
+        "halfhearted": (
+            "You upload the OMEGA data to a public mirror at 3:21 AM. You go to bed. You go to work in "
+            "the morning. The story breaks two weeks later, slowly. The reporters who pick it up are not "
+            "the ones who matter. NovaBridge releases a statement calling the documents 'an unauthorized "
+            "summary of legitimate research.' The compound is not pulled. The cohort continues.<br><br>"
+            "You did something. You did not do enough. You think about that for a long time."
+        ),
+        "clean": (
+            "It worked. Mostly cleanly. The story breaks within weeks, anchored by reproducible evidence. "
+            "NovaBridge contests it; NovaBridge loses; the compound is pulled. You don't testify. You don't "
+            "become the story. You go on living a life that is slightly different from the one you had "
+            "twelve hours earlier."
+        ),
+        "messy": (
+            "It worked. Not cleanly. Some of the evidence held up; some of it didn't. The compound is pulled "
+            "eventually. The story takes longer to land than it should have. You spend a year wondering "
+            "whether you should have made a different choice on at least one of the three objectives."
+        ),
+        "incomplete": (
+            "It half-worked. The data is out there, but not in a form that mobilizes anyone. "
+            "NovaBridge contests it successfully on technicalities. The Phase I trial stays suspended; "
+            "the registry doesn't change. You wonder, later, what would have happened if you'd committed."
+        ),
+    }
+
+    return name, EPILOGUES[tone], score
+
+
+def _option_label(obj_key, opt_key):
+    """Render an option label with an item-icon chip when the option uses a career item."""
+    from src.career import ITEMS
+    opt = HEIST_OBJECTIVES[obj_key]["options"][opt_key]
+    req = opt["requires"]
+    if req is None:
+        return opt["label"]
+    return f"{opt['label']} — uses {ITEMS[req]['icon']}"
+
+
 def chapter_6():
     st.markdown('<div class="chapter-header">Chapter 6 — Hidden</div>', unsafe_allow_html=True)
-    st.markdown('<div class="chapter-title">Six Months Later</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chapter-title">The Operation</div>', unsafe_allow_html=True)
 
+    # ── Setup memo ────────────────────────────────────────────────────────────
     st.markdown("""
     <div class="memo">
     <div class="memo-header">NovaBridge Systems — Performance Review // NB-ANALYST-4471 // Q2 2027</div>
-    Promoted twice. Year-end bonus exceeded target by 18%.
-    Cleared for Level 3 access pending Q3 review.
-    <br><br>
+    Promoted twice. Year-end bonus exceeded target by 18%. Cleared for Level 3 access pending Q3 review.
     Recommended for the NEURO-LATTICE extended program.
     <br><br>
-    <em style="color:#22c55e">"A model employee. Discreet, thorough, low-overhead."<br>
-    — C. Weiss</em>
+    <em style="color:#22c55e">"A model employee. Discreet, thorough, low-overhead." — C. Weiss</em>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""
     <div class="memo" style="border-color:#92400e;background:#1c1000">
-    You still have the screenshot. It's been sitting on an encrypted drive in a safety
-    deposit box for six months. You haven't opened it.
+    Six months of compliance. Six months of bonuses. The screenshot in a safe deposit box.
+    The cloned keycard in the back of a desk drawer. $32,400 in an account NovaBridge can't see.
     <br><br>
-    You still have her keycard. The magnetic strip stopped working after 48 hours, but
-    you cloned it the night you took it. You've never used the clone.
+    Last Tuesday, while auditing a partition you'd been avoiding, you found
+    <strong style="color:#f59e0b">KAPPA_COHORT</strong>. 211 entries. 22 marked COMPLETED.
+    Targeting compound: NL-7-VAR. The trial was suspended. The cohort was not.
     <br><br>
-    The bonus paid your loans. There's $32,400 left in an account NovaBridge can't see.
-    <br><br>
-    Last Tuesday at 11:14 PM, while running an audit on the OMEGA_COHORT partition
-    you'd been quietly avoiding, you found a second table.
+    You have until 6:00 AM before the automated audit notices anything missing. Three objectives.
+    Pick how you complete each.
     </div>
     """, unsafe_allow_html=True)
 
-    if "ch6_examined" not in st.session_state:
-        st.session_state.ch6_examined = False
+    # ── Objective panels ──────────────────────────────────────────────────────
+    chosen = {}
+    for obj_key in ("extract", "publish", "protect"):
+        obj = HEIST_OBJECTIVES[obj_key]
+        st.markdown("---")
+        st.markdown(f'<div class="chapter-header">Objective — {obj_key.upper()}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:1.2rem;font-weight:800;color:#f1f5f9;margin-bottom:0.3rem">{obj["title"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:0.88rem;color:#94a3b8;margin-bottom:0.9rem;line-height:1.6">{obj["subtitle"]}</div>', unsafe_allow_html=True)
 
-    if st.button("🔍 Open the partition", key="ch6_open", disabled=st.session_state.ch6_examined):
-        st.session_state.ch6_examined = True
-        st.rerun()
+        # Filter options to those whose requirements are satisfied
+        available = [
+            (k, _option_label(obj_key, k))
+            for k, opt in obj["options"].items()
+            if opt["requires"] is None or has_item(opt["requires"])
+        ]
+        labels = [lbl for _, lbl in available]
+        keys = [k for k, _ in available]
 
-    if st.session_state.ch6_examined:
-        st.markdown("""
-        <div class="terminal">
-        <span class="terminal-prompt">NB-LATTICE > </span>SELECT COUNT(*), status FROM KAPPA_COHORT GROUP BY status<br><br>
-        <span class="terminal-output">COUNT(*) | status<br>
-        ---------|------------<br>
-        47       | MONITORING<br>
-        142      | FLAGGED<br>
-        <span class="terminal-flag">22       | COMPLETED</span><br>
-        <br>
-        211 entries total. Surface variant: KFTRLLLTQ (second-position substitution).<br>
-        Targeting compound: NL-7-VAR.<br>
-        Trial status (per Compound Registry): SUSPENDED — phase I.<br>
-        <br>
-        <span class="terminal-alert">This compound is suspended. This cohort is active.</span></span>
-        </div>
-        """, unsafe_allow_html=True)
+        pick = st.radio(
+            f"How do you handle {obj_key}?",
+            labels,
+            index=None,
+            key=f"ch6_{obj_key}_radio",
+            label_visibility="collapsed",
+        )
+        if pick is not None:
+            pick_key = keys[labels.index(pick)]
+            chosen[obj_key] = pick_key
+            inline = obj["options"][pick_key]["inline"]
+            st.caption(f"↳ {inline}")
 
-        st.markdown("""
-        <div class="doc-block danger">
-        NL-7-VAR was the variant compound from Chapter 1. The trial was suspended.
-        The targeting list was not.
-        <br><br>
-        211 people. 22 already "completed."
-        <br><br>
-        You go home. You sit in your apartment. You think about the screenshot in the
-        safety deposit box, and the cloned keycard in the back of your desk drawer.
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Execute ───────────────────────────────────────────────────────────────
+    if len(chosen) == 3:
+        st.markdown("---")
+        if st.button("⏵ Execute the operation", key="ch6_execute", type="primary", use_container_width=True):
+            st.session_state.ch6_result = chosen
+            st.rerun()
+
+    if st.session_state.get("ch6_result"):
+        result = st.session_state.ch6_result
+        name, epilogue, score = _resolve_heist(result["extract"], result["publish"], result["protect"])
 
         st.markdown("---")
-        st.markdown('<div class="choice-header">How do you move?</div>', unsafe_allow_html=True)
-
-        method = st.radio(
-            "You have access, evidence, money, and six months of clean compliance metrics. Use them how?",
-            [
-                "A — Use Park's cloned keycard to access Langley-Stanford's secure network after hours. Upload everything from inside a real research institution. Untraceable to you.",
-                "B — Reach out to Park directly. Drop your cover, but coordinate a joint preprint. Slower. Riskier. But she has standing you'll never have.",
-                "C — Dump everything to a public mirror tonight. Anonymous. No coordination. The story is the story.",
-            ],
-            index=None,
-            key="ch6_radio",
+        st.markdown(
+            f'<div style="text-align:center;margin:1rem 0">'
+            f'<div style="font-size:0.7rem;letter-spacing:0.3em;color:#64748b;text-transform:uppercase">Outcome</div>'
+            f'<div style="font-size:2rem;font-weight:900;color:#f59e0b;margin-top:0.2rem">{name}</div>'
+            f'<div style="font-size:0.85rem;color:#94a3b8;margin-top:0.2rem">Operation score: {score} / 6</div>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
+        st.markdown(f'<div class="ending-block leak">{epilogue}</div>', unsafe_allow_html=True)
 
-        if method:
-            if method.startswith("A"):
-                outcome = "ghost"
-                summary = "You let yourself into the Langley-Stanford genomics building at 2:14 AM with a cloned visitor's badge. You upload the screenshot, the OMEGA_COHORT schema, the KAPPA_COHORT counts, and the NL-7 compound brief to an FTP endpoint Yuna's lab uses for cross-institutional dataset sharing. You leave at 2:31 AM. The badge stops working three minutes later — its 48-hour clone window expires while you're walking to your car."
-                epilogue = "The preprint posts six weeks later. The supplementary data references 'an anonymous institutional source.' NovaBridge's internal investigation looks at every NovaBridge employee who'd ever visited Langley-Stanford. There are none. You receive a Q3 raise."
-            elif method.startswith("B"):
-                outcome = "coordinated"
-                summary = "You write to Park from your personal account. Not anonymous. You tell her your name, your title, what you have. You attach the KAPPA_COHORT counts as proof. She replies in twelve minutes: <em>'I remember your face. Meet me Saturday.'</em> You meet in Portland. She brings two co-authors. You bring everything."
-                epilogue = "The joint preprint posts six weeks later. Your name is on it. NovaBridge sues. NovaBridge loses. Three years later you teach a guest seminar at Langley-Stanford on ethical data infrastructure. You introduce yourself by your first name."
-            else:
-                outcome = "dump"
-                summary = "At 3:47 AM you push every file to a public mirror. No coordination, no journalists, no Park. The mirror is Tor-fronted but the metadata isn't. NovaBridge's forensics team pulls authorship signatures from the file headers within seventy-two hours."
-                epilogue = "The story breaks. The story is real. The story is also messy — the public dump includes the raw query log, which contains patient identifiers that should have been scrubbed. Privacy advocates condemn the leaker. NovaBridge sues for trade secret theft. You don't win. You don't lose either. The compound is pulled. 211 people are not on a list anymore."
-
-            st.markdown(f'<div class="doc-block">{summary}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="ending-block leak">{epilogue}</div>', unsafe_allow_html=True)
-
-            # Mark game (override the earlier "bystander" with vigilante)
-            if not st.session_state.ch6_done:
-                mark_game_complete("analyst", f"vigilante_{outcome}", analyst_suspicion_at_end=st.session_state.suspicion)
-                mark_path("vigilante")
-                st.session_state.ch6_done = True
-
+        # Record outcome
+        if not st.session_state.ch6_done:
+            outcome_id = f"vigilante_{result['extract']}_{result['publish']}_{result['protect']}"
+            mark_game_complete("analyst", outcome_id, analyst_suspicion_at_end=st.session_state.suspicion)
+            mark_path("vigilante")
+            st.session_state.ch6_done = True
             st.balloons()
-            st.markdown("---")
-            if st.button("↩ Return to career hub", use_container_width=True):
-                st.switch_page("app.py")
+
+        st.markdown("---")
+        if st.button("↩ Return to career hub", use_container_width=True):
+            st.switch_page("app.py")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
